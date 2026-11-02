@@ -4,11 +4,15 @@
 
 AgentContract is a local developer tool with a browser workspace and an automation-friendly CLI. Version 0.3 focuses on an end-to-end Spring Boot workflow: approve policies, generate consistent guidance, check Java and instruction files, and review actionable findings.
 
+**Free and open source under the [MIT license](LICENSE).** No subscription, account, or AI API key is required. This is an early release; supported checks and limitations are documented below.
+
 ## Start the app
 
-Python 3.12+ is required. From this repository:
+Python 3.12+ is required. On macOS or Linux:
 
 ```sh
+git clone https://github.com/rrezartprebreza/agent-contract.git
+cd agent-contract
 python3 -m venv .venv
 .venv/bin/python -m pip install .
 .venv/bin/agentcontract serve examples/spring-demo
@@ -124,3 +128,12 @@ The local app uses a per-session token, strict Host/Origin checks, a content sec
 Tests cover analyzers, false positives, YAML validation, legacy migration, guidance preservation, report escaping, SARIF structure, and real local HTTP API flows. HTTP tests require loopback socket access. Browser QA covers the overview, policy save, generated guidance, running checks, and finding filters.
 
 See `docs/ROADMAP.md` for scope and outstanding work. This release does not complete the original universal-platform specification: TypeScript/C#, general convention inference, PR diff/baseline analysis, full plugin contracts, and production hardening remain future work.
+
+
+## Help improve AgentContract
+
+Try the included demo, then a repository whose policies you know. Report useful findings, false positives, installation problems, or missing rules through [GitHub Issues](https://github.com/rrezartprebreza/agent-contract/issues).
+
+Include your operating system, Python and AgentContract versions, the relevant policy, a minimal code example, and expected versus actual behavior. Remove secrets and private source code before sharing. The most useful feedback is whether you would keep the check enabled in your daily workflow.
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for development guidance and [the roadmap](docs/ROADMAP.md) for planned work. Dependencies retain their own licenses.

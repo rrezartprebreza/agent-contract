@@ -6,7 +6,13 @@ name = "agentcontract"
 version = "0.3.0"
 description = "Local engineering policy verification and agent guidance"
 requires-python = ">=3.12"
+readme = "README.md"
+license = {file = "LICENSE"}
 dependencies = ["tree-sitter>=0.25,<0.27", "tree-sitter-java>=0.23,<0.24", "PyYAML>=6,<7", "pydantic>=2.10,<3"]
+[project.urls]
+Repository = "https://github.com/rrezartprebreza/agent-contract"
+Issues = "https://github.com/rrezartprebreza/agent-contract/issues"
+
 [project.scripts]
 agentcontract = "agentcontract.cli:main"
 [tool.setuptools.packages.find]
