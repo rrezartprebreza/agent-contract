@@ -18,8 +18,8 @@ def load_policy(root):
 
 
 def main(argv=None):
-    parser = argparse.ArgumentParser(description='AgentContract — approved policies, consistent guidance, verified code')
-    parser.add_argument('--version', action='version', version='AgentContract 0.3.0')
+    parser = argparse.ArgumentParser(description='AgentAccord — approved policies, consistent guidance, verified code')
+    parser.add_argument('--version', action='version', version='AgentAccord 0.3.0')
     sub = parser.add_subparsers(dest='command', required=True)
     for command in ('init', 'check', 'baseline', 'guidance', 'scan', 'doctor', 'rules', 'serve'):
         cmd = sub.add_parser(command)
@@ -40,11 +40,11 @@ def main(argv=None):
         if not root.is_dir():
             raise ValueError('Repository path must be a directory')
         if args.command == 'init':
-            if any((root / name).exists() or (root / name).is_symlink() for name in ['.agentcontract.yml', '.agentcontract.toml']):
+            if any((root / name).exists() or (root / name).is_symlink() for name in configuration.POLICY_FILES):
                 raise ValueError('A policy already exists; refusing overwrite')
             policy = configuration.Policy(rules={key: configuration.RulePolicy() for key in RULES})
             configuration.save(root, policy)
-            print('Created .agentcontract.yml with proposed rules. Approve rules in agentcontract serve or set approved: true explicitly.')
+            print('Created .agentaccord.yml with proposed rules. Approve rules in agentaccord serve or set approved: true explicitly.')
             return 0
         if args.command == 'serve':
             from .server import serve
@@ -63,7 +63,7 @@ def main(argv=None):
         rules = policy.active()
         catalog = policy.catalog()
         if args.command == 'doctor':
-            print(f'AgentContract 0.3.0 | Python {sys.version.split()[0]}\nPolicy valid: {len(rules)} approved rule(s)\nJava: Tree-sitter | Python: AST | Instructions: explicit patterns')
+            print(f'AgentAccord 0.3.0 | Python {sys.version.split()[0]}\nPolicy valid: {len(rules)} approved rule(s)\nJava: Tree-sitter | Python: AST | Instructions: explicit patterns')
             return 0
         if args.command == 'guidance':
             if not rules:
@@ -105,7 +105,7 @@ def main(argv=None):
             accepted = f" · {known['accepted']} accepted by baseline" if known.get('accepted') else ''
             lines.append(f"{new} finding(s){accepted} · {report['analyzed_files']} files analyzed{excluded} · {len(rules)} approved rules")
             if known.get('stale'):
-                lines.append(f"{known['stale']} baseline entries were fixed: run agentcontract baseline --prune")
+                lines.append(f"{known['stale']} baseline entries were fixed: run agentaccord baseline --prune")
             if not rules:
                 lines.append('No approved rules. Approve policies before checking compliance.')
             rendered = '\n'.join(lines)
@@ -117,8 +117,8 @@ def main(argv=None):
             print(rendered)
         return exit_code(report)
     except (OSError, ValueError, yaml.YAMLError, RecursionError) as error:
-        print(f'agentcontract: {error}', file=sys.stderr)
+        print(f'agentaccord: {error}', file=sys.stderr)
         return 2
     except Exception as error:  # noqa: BLE001 — an uncaught crash would exit 1, which means "violations"
-        print(f'agentcontract: internal error ({type(error).__name__}: {error}). Please report it.', file=sys.stderr)
+        print(f'agentaccord: internal error ({type(error).__name__}: {error}). Please report it.', file=sys.stderr)
         return 2

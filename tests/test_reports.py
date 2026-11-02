@@ -2,9 +2,9 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
-from agentcontract.cli import analyze, scan, main
-from agentcontract.reporters import dashboard, sarif
-from agentcontract.discovery import discover
+from agentaccord.cli import analyze, scan, main
+from agentaccord.reporters import dashboard, sarif
+from agentaccord.discovery import discover
 import test_cli
 
 class ReportTests(unittest.TestCase):

@@ -4,8 +4,8 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
-from agentcontract.cli import CONFIG, analyze, main, scan
-from agentcontract.configuration import Policy, RulePolicy, save
+from agentaccord.cli import CONFIG, analyze, main, scan
+from agentaccord.configuration import Policy, RulePolicy, save
 
 RULES = {'spring.no-webmvctest': 'error', 'spring.no-value': 'warning'}
 WEB = 'org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest'

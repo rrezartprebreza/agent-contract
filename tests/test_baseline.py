@@ -8,11 +8,11 @@ import tempfile
 import threading
 import unittest
 from pathlib import Path
-from agentcontract import baseline, configuration as config
-from agentcontract.cli import main
-from agentcontract.engine import exit_code, scan
-from agentcontract.reporters import dashboard, sarif
-from agentcontract.server import make_server
+from agentaccord import baseline, configuration as config
+from agentaccord.cli import main
+from agentaccord.engine import exit_code, scan
+from agentaccord.reporters import dashboard, sarif
+from agentaccord.server import make_server
 
 AUTOWIRED = 'org.springframework.beans.factory.annotation.Autowired'
 VALUE = 'org.springframework.beans.factory.annotation.Value'
@@ -127,7 +127,7 @@ class BaselineTests(unittest.TestCase):
         results = sarif(report)['runs'][0]['results']
         states = sorted((r['locations'][0]['physicalLocation']['artifactLocation']['uri'], r['baselineState']) for r in results)
         self.assertEqual(states, [('Other.java', 'new'), ('Service.java', 'unchanged')])
-        self.assertTrue(all(len(r['partialFingerprints']['agentcontract/v1']) == 32 for r in results))
+        self.assertTrue(all(len(r['partialFingerprints']['agentaccord/v1']) == 32 for r in results))
         html = dashboard(report)
         self.assertIn('Other.java', html)
         self.assertNotIn('Service.java:', html)
@@ -142,7 +142,7 @@ class BaselineTests(unittest.TestCase):
         self.addCleanup(lambda: (server.shutdown(), server.server_close(), thread.join()))
         conn = http.client.HTTPConnection('127.0.0.1', server.server_port, timeout=5)
         conn.request('POST', '/api/check', body='{}', headers={
-            'Content-Type': 'application/json', 'X-AgentContract-Token': server.token})
+            'Content-Type': 'application/json', 'X-AgentAccord-Token': server.token})
         result = json.loads(conn.getresponse().read())
         conn.close()
         self.assertEqual(result['exit_code'], 0)

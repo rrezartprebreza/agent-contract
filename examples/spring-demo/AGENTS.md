@@ -27,12 +27,12 @@ class LegacyService {
 }
 ```
 
-<!-- agentcontract:begin -->
+<!-- agentaccord:begin -->
 ## Approved engineering policies
 
-Generated from the approved AgentContract policy.
+Generated from the approved AgentAccord policy.
 - Do not use @Data. Use records or explicit accessors. [custom.no-lombok-data; warning]
 - Do not use field injection. Inject dependencies through the constructor. [spring.no-field-injection; error]
 - Do not use @Value. Use validated configuration properties. [spring.no-value; warning]
 - Do not use @WebMvcTest. Use the repository-approved integration testing approach. [spring.no-webmvctest; error]
-<!-- agentcontract:end -->
+<!-- agentaccord:end -->

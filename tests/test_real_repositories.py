@@ -1,4 +1,4 @@
-"""Regressions found by running AgentContract on real repositories (skills, docs, Lombok code)."""
+"""Regressions found by running AgentAccord on real repositories (skills, docs, Lombok code)."""
 import contextlib
 import io
 import os
@@ -6,10 +6,10 @@ import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
-from agentcontract import configuration as config, instructions, python_checks
-from agentcontract.cli import main
-from agentcontract.engine import analyze, compile_exclude, exit_code, scan
-from agentcontract.java_checks import JavaSyntaxError
+from agentaccord import configuration as config, instructions, python_checks
+from agentaccord.cli import main
+from agentaccord.engine import analyze, compile_exclude, exit_code, scan
+from agentaccord.java_checks import JavaSyntaxError
 
 RULES = {'spring.no-field-injection': 'error', 'spring.no-value': 'warning', 'spring.no-webmvctest': 'error'}
 AUTOWIRED = 'org.springframework.beans.factory.annotation.Autowired'
@@ -125,7 +125,7 @@ class ExcludeTests(unittest.TestCase):
         repo = Repo()
         self.addCleanup(repo.temp.cleanup)
         config.save(repo.root, config.Policy(rules={'spring.no-value': config.RulePolicy(approved=True)}))
-        self.assertNotIn('exclude', (repo.root / '.agentcontract.yml').read_text())
+        self.assertNotIn('exclude', (repo.root / '.agentaccord.yml').read_text())
         config.save(repo.root, config.Policy(exclude=['examples/**']))
         self.assertEqual(config.load(repo.root).exclude, ['examples/**'])
 
@@ -155,7 +155,7 @@ class RobustnessTests(unittest.TestCase):
         self.addCleanup(repo.temp.cleanup)
         config.save(repo.root, config.Policy(rules={'spring.no-value': config.RulePolicy(approved=True)}))
         output = io.StringIO()
-        with mock.patch('agentcontract.cli.scan', side_effect=RuntimeError('boom')), \
+        with mock.patch('agentaccord.cli.scan', side_effect=RuntimeError('boom')), \
                 contextlib.redirect_stdout(output), contextlib.redirect_stderr(output):
             status = main(['check', str(repo.root)])
         self.assertEqual(status, 2)
@@ -269,7 +269,7 @@ class CustomRuleTests(unittest.TestCase):
         repo = Repo()
         self.addCleanup(repo.temp.cleanup)
         config.save(repo.root, self.policy())
-        text = (repo.root / '.agentcontract.yml').read_text()
+        text = (repo.root / '.agentaccord.yml').read_text()
         self.assertNotIn('remediation', text)
         self.assertEqual(text.count('target'), 1)
         self.assertEqual(config.load(repo.root), self.policy())

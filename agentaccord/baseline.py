@@ -6,7 +6,8 @@ from datetime import datetime, timezone
 from pydantic import BaseModel, ConfigDict, Field, StrictInt, StrictStr, model_validator
 from .configuration import atomic_write
 
-FILENAME = '.agentcontract-baseline.json'
+FILENAME = '.agentaccord-baseline.json'
+LEGACY_FILENAME = '.agentcontract-baseline.json'  # AgentContract (former name); read, never written
 MAX_BYTES = 5_000_000
 
 
@@ -32,16 +33,21 @@ class Baseline(BaseModel):
         return self
 
 
+def present(root):
+    return next((root / name for name in (FILENAME, LEGACY_FILENAME)
+                 if (root / name).exists() or (root / name).is_symlink()), None)
+
+
 def load(root):
-    path = root / FILENAME
-    if not path.exists() and not path.is_symlink():
+    path = present(root)
+    if path is None:
         return None
     if path.is_symlink() or not path.is_file() or path.stat().st_size > MAX_BYTES:
-        raise ValueError(f'{FILENAME} must be a regular file under 5 MB')
+        raise ValueError(f'{path.name} must be a regular file under 5 MB')
     try:
         data = json.loads(path.read_text(encoding='utf-8'))
     except json.JSONDecodeError as error:
-        raise ValueError(f'{FILENAME} is not valid JSON: {error}') from error
+        raise ValueError(f'{path.name} is not valid JSON: {error}') from error
     return Baseline.model_validate(data)
 
 
@@ -61,9 +67,9 @@ def write(root, baseline):
 def create(root, report):
     if not report.get('approved_rules'):
         raise ValueError('Approve at least one rule before creating a baseline')
-    path = root / FILENAME
-    if path.exists() or path.is_symlink():
-        raise ValueError(f'{FILENAME} already exists; refusing overwrite. Use --prune to remove fixed entries')
+    existing = present(root)
+    if existing is not None:
+        raise ValueError(f'{existing.name} already exists; refusing overwrite. Use --prune to remove fixed entries')
     baseline = Baseline(created=datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
                         findings=entries(report['findings']))
     write(root, baseline)
@@ -74,7 +80,7 @@ def prune(root, report):
     """Drop entries that no longer occur and lower counts that shrank. Never adds or raises counts."""
     baseline = load(root)
     if baseline is None:
-        raise ValueError(f'No {FILENAME} to prune. Create one with agentcontract baseline')
+        raise ValueError(f'No {FILENAME} to prune. Create one with agentaccord baseline')
     current = Counter(f['fingerprint'] for f in report['findings'])
     kept = {fp: entry.model_copy(update={'count': min(entry.count, current[fp])})
             for fp, entry in baseline.findings.items() if current[fp]}
@@ -104,6 +110,6 @@ def apply(report, root):
     if accepted:
         notes.append(f'{accepted} existing finding(s) accepted by the baseline ({FILENAME}); reported, but not blocking.')
     if stale:
-        notes.append(f'{stale} baseline entr{"y" if stale == 1 else "ies"} no longer occur: run agentcontract baseline --prune to shrink it.')
+        notes.append(f'{stale} baseline entr{"y" if stale == 1 else "ies"} no longer occur: run agentaccord baseline --prune to shrink it.')
     report['limitations'] = [*report['limitations'], *notes]
     return report
