@@ -1,24 +1,25 @@
 """Deliberately narrow conflict patterns and a protected generated guidance block."""
 import re
 from .rules import RULES
+from .java_checks import analyze_snippet
 from .configuration import read_regular
 
 START = '<!-- agentcontract:begin -->'
 END = '<!-- agentcontract:end -->'
 
 
-def guidance(policies):
+def guidance(policies, catalog=RULES):
     lines = [START, '## Approved engineering policies', '', 'Generated from the approved AgentContract policy.']
-    lines += [f'- {RULES[rule]["guidance"]} [{rule}; {severity}]' for rule, severity in sorted(policies.items()) if severity != 'off']
+    lines += [f'- {catalog[rule]["guidance"]} [{rule}; {severity}]' for rule, severity in sorted(policies.items()) if severity != 'off']
     return '\n'.join([*lines, END, ''])
 
 
-def sync(root, policies):
+def sync(root, policies, catalog=RULES):
     path = root / 'AGENTS.md'
     original = read_regular(path) if path.exists() or path.is_symlink() else ''
     if original.count(START) != original.count(END) or original.count(START) > 1:
         raise ValueError('Malformed AgentContract guidance markers; refusing to modify AGENTS.md')
-    block = guidance(policies)
+    block = guidance(policies, catalog)
     if START in original:
         start, end = original.index(START), original.index(END)
         if end < start:
@@ -34,21 +35,66 @@ def sync(root, policies):
     return True
 
 
-def analyze(source, path, policies):
+# A labelled counter-example is teaching material, not guidance. ✅/Good wins over ❌/Bad.
+NEGATIVE = re.compile(r"❌|✗|⛔|\b(?:bad|wrong|incorrect|avoid|anti-?pattern|don'?t|do not|never|before|without)\b", re.I)
+POSITIVE = re.compile(r'✅|✔|\b(?:good|correct|recommended|preferred|after)\b', re.I)
+EXAMPLE_LANGUAGES = {'', 'java'}
+
+
+def counter_example(block_lines, context):
+    for text in [*[line for line in block_lines if line.strip()][:3], *reversed(context)]:
+        if POSITIVE.search(text):
+            return False
+        if NEGATIVE.search(text):
+            return True
+    return False
+
+
+def directive_pattern(rule, spec):
+    phrase = spec.get('instruction_phrase')
+    if phrase:
+        return r'^(?:use|prefer|always use)\s+' + re.escape(phrase) + r'\b'
+    if spec.get('annotation'):
+        return r'^(?:use|prefer|always use)\s+`?@' + re.escape(spec['annotation']) + r'\b'
+    return None
+
+
+def analyze(source, path, policies, catalog=RULES):
     findings = []
     fence = None
+    block, block_start, block_language, block_context = [], 0, '', []
+    context = []  # the two most recent prose lines, for counter-example labels
     in_comment = False
-    for number, line in enumerate(source.splitlines(), 1):
+    in_list = False
+    lines = source.splitlines()
+    for number, line in enumerate(lines, 1):
         stripped = line.strip()
         marker = re.match(r'^(`{3,}|~{3,})', stripped)
         if marker:
             value = marker[1]
             if fence is None:
                 fence = value
-            elif value[0] == fence[0] and len(value) >= len(fence):
+                info = stripped[len(value):].strip()
+                block, block_start, block_context = [], number + 1, list(context)
+                block_language = info.split()[0].lower() if info else ''
+            elif value[0] == fence[0] and len(value) >= len(fence) and not stripped[len(value):].strip():
                 fence = None
+                findings.extend(example_findings(block, block_start, block_language, block_context, path, policies, catalog))
             continue
-        if fence or line.startswith(('    ', '\t')) or stripped.startswith('>'):
+        if fence:
+            block.append(line)
+            continue
+        if not stripped:
+            continue
+        context = [*context, stripped][-2:]
+        indented = line.startswith(('    ', '\t'))
+        is_item = re.match(r'^(?:[-*+]|\d+[.)])\s+', stripped) is not None
+        # Indented text inside a list is list content (nested items, continuations), not code.
+        if indented and not (in_list or is_item):
+            continue
+        if not indented:
+            in_list = is_item
+        if stripped.startswith('>'):
             continue
         if '<!--' in line:
             in_comment = True
@@ -56,21 +102,28 @@ def analyze(source, path, policies):
             if '-->' in line:
                 in_comment = False
             continue
-        sentence = re.sub(r'^\s*(?:[-*]|\d+[.)])\s+', '', line).strip()
+        sentence = re.sub(r'^\s*(?:[-*+]|\d+[.)])\s+', '', line).strip()
         if re.search(r"\b(if|unless|except|not|never|avoid|don't)\b", sentence, re.I):
             continue
         for rule, severity in policies.items():
-            if severity == 'off':
-                continue
-            if rule == 'spring.no-field-injection':
-                pattern = r'^(?:use|prefer|always use)\s+field injection\b'
-            elif rule in {'spring.no-webmvctest', 'spring.no-value'}:
-                pattern = r'^(?:use|prefer|always use)\s+`?@' + RULES[rule]['annotation'] + r'\b'
-            else:
-                continue
-            if re.search(pattern, sentence, re.I):
+            pattern = directive_pattern(rule, catalog[rule]) if severity != 'off' else None
+            if pattern and re.search(pattern, sentence, re.I):
                 findings.append(dict(rule=rule, severity=severity, path=path, line=number,
                     column=len(line) - len(line.lstrip()) + 1, kind='instruction', confidence='pattern',
-                    message='Instruction contradicts an approved policy: ' + RULES[rule]['title'],
-                    evidence=sentence[:240], remediation=RULES[rule]['guidance']))
+                    message='Instruction contradicts an approved policy: ' + catalog[rule]['title'],
+                    evidence=sentence[:240], remediation=catalog[rule]['guidance']))
+    return findings
+
+
+def example_findings(block, start, language, context, path, policies, catalog):
+    """Code examples teach agents as strongly as prose. Reported as warnings: they are
+    heuristic and must never block a build on their own."""
+    if language not in EXAMPLE_LANGUAGES or counter_example(block, context):
+        return []
+    findings = []
+    for rule, index, column, evidence in analyze_snippet('\n'.join(block), policies, catalog):
+        findings.append(dict(rule=rule, severity='warning', path=path, line=start + index,
+            column=column, kind='instruction', confidence='example',
+            message='Code example teaches a pattern the approved policy prohibits: ' + catalog[rule]['title'],
+            evidence=evidence, remediation=catalog[rule]['guidance'] + ' Label intentional counter-examples with ❌ or "Bad".'))
     return findings

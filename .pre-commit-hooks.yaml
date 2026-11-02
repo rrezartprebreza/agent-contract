@@ -1,0 +1,7 @@
+- id: agentcontract
+  name: AgentContract policy check
+  description: Check source code and agent instructions against the approved AgentContract policy.
+  entry: agentcontract check
+  language: python
+  pass_filenames: false
+  always_run: true

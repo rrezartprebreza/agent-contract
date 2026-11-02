@@ -1,0 +1,36 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        python: ["3.12", "3.13"]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Install
+        run: python -m pip install .
+      - name: Unit and HTTP integration tests
+        run: python -m unittest discover -s tests -v
+      - name: Dogfood the CLI exit-code contract
+        shell: bash
+        run: |
+          set +e
+          agentcontract check examples/spring-demo; demo=$?
+          agentcontract check examples/passing; passing=$?
+          agentcontract check examples/spring-demo --format sarif > /dev/null; sarif=$?
+          echo "spring-demo=$demo passing=$passing sarif=$sarif"
+          test "$demo" -eq 1 && test "$passing" -eq 0 && test "$sarif" -eq 1

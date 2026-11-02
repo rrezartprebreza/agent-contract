@@ -1,11 +1,12 @@
 """Validated approved policies. Unapproved rules never block checks."""
 import os
+import re
 import tempfile
 import tomllib
 from pathlib import Path
 from typing import Literal
 import yaml
-from pydantic import BaseModel, ConfigDict, Field, StrictBool, StrictInt, model_validator
+from pydantic import BaseModel, ConfigDict, Field, StrictBool, StrictInt, StrictStr, model_validator
 from .rules import RULES
 
 class RulePolicy(BaseModel):
@@ -14,19 +15,57 @@ class RulePolicy(BaseModel):
     approved: StrictBool = False
     severity: Literal['error', 'warning'] = 'error'
 
+JAVA_NAME = r'[A-Za-z_$][A-Za-z0-9_$]*'
+
+
+class CustomRule(BaseModel):
+    """A team-defined prohibited Java annotation, checked like the built-in Spring rules."""
+    model_config = ConfigDict(extra='forbid')
+    title: StrictStr = Field(min_length=1, max_length=80)
+    annotation: StrictStr = Field(pattern=rf'^{JAVA_NAME}(?:\.{JAVA_NAME})+$', max_length=200)
+    guidance: StrictStr = Field(min_length=1, max_length=300)
+    remediation: StrictStr | None = Field(default=None, max_length=300)
+    target: Literal['any', 'field'] = 'any'
+
+
 class Policy(BaseModel):
     model_config = ConfigDict(extra='forbid')
     version: StrictInt = 1
     rules: dict[str, RulePolicy] = Field(default_factory=dict)
+    # Approved scope exclusions (e.g. teaching examples). Excluded files are counted in reports.
+    exclude: list[StrictStr] = Field(default_factory=list, max_length=50)
+    # Team-defined rules (ids start with "custom."); like built-ins they run only once approved.
+    custom: dict[str, CustomRule] = Field(default_factory=dict, max_length=50)
 
     @model_validator(mode='after')
     def validate_contract(self):
         if self.version != 1:
             raise ValueError('Only policy version 1 is supported')
-        unknown = set(self.rules) - set(RULES)
+        for rule in self.custom:
+            if not re.fullmatch(r'custom\.[a-z0-9][a-z0-9-]{0,62}', rule):
+                raise ValueError(f'Custom rule id {rule!r} must look like custom.no-lombok-data')
+        unknown = set(self.rules) - set(RULES) - set(self.custom)
         if unknown:
             raise ValueError('Unknown rules: ' + ', '.join(sorted(unknown)))
+        for pattern in self.exclude:
+            parts = pattern.split('/')
+            if (not pattern or len(pattern) > 200 or pattern != pattern.strip() or pattern.startswith('/')
+                    or '\\' in pattern or any(part in ('', '.', '..') for part in parts)):
+                raise ValueError(f'Invalid exclude pattern: {pattern!r}. Use repository-relative globs such as examples/**')
+        if len(set(self.exclude)) != len(self.exclude):
+            raise ValueError('Duplicate exclude patterns')
         return self
+
+    def catalog(self):
+        """Built-in rules plus this policy's custom rules, in the shape the analyzers expect."""
+        merged = dict(RULES)
+        for rule, spec in self.custom.items():
+            simple = spec.annotation.rsplit('.', 1)[-1]
+            merged[rule] = {'title': spec.title, 'language': 'Java', 'guidance': spec.guidance,
+                'remediation': spec.remediation or spec.guidance, 'annotation': simple,
+                'imports': [spec.annotation], 'custom': True,
+                **({'target': 'field'} if spec.target == 'field' else {})}
+        return merged
 
     def active(self):
         return {rule: p.severity for rule, p in self.rules.items() if p.enabled and p.approved}
@@ -80,7 +119,16 @@ def save(root, policy):
     target = root / '.agentcontract.yml'
     if target.is_symlink() or (target.exists() and not target.is_file()):
         raise ValueError('Refusing to replace a non-regular policy file')
-    serialized = yaml.safe_dump(policy.model_dump(), sort_keys=False)
+    data = policy.model_dump()
+    for optional in ('exclude', 'custom'):
+        if not data[optional]:
+            del data[optional]  # keep existing policy files unchanged when the feature is unused
+    for spec in data.get('custom', {}).values():
+        if spec['remediation'] is None:
+            del spec['remediation']
+        if spec['target'] == 'any':
+            del spec['target']
+    serialized = yaml.safe_dump(data, sort_keys=False)
     fd, temporary = tempfile.mkstemp(prefix='.agentcontract-', dir=root)
     try:
         with os.fdopen(fd, 'w', encoding='utf-8') as stream:

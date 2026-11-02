@@ -17,7 +17,46 @@ def walk(node):
         stack.extend(reversed(item.named_children))
 
 
-def analyze(source, path, policies):
+TEST_CLASS_ANNOTATIONS = {'SpringBootTest', 'WebMvcTest', 'WebFluxTest', 'DataJpaTest', 'DataJdbcTest', 'JdbcTest',
+    'DataMongoTest', 'DataRedisTest', 'JsonTest', 'RestClientTest', 'GraphQlTest', 'ExtendWith', 'Nested'}
+TEST_METHOD_ANNOTATIONS = {'Test', 'ParameterizedTest', 'RepeatedTest', 'TestFactory', 'TestTemplate'}
+
+
+def annotation_names(modifiers, data):
+    names = set()
+    for child in (modifiers.named_children if modifiers else ()):
+        if child.type in {'annotation', 'marker_annotation'}:
+            name = child.child_by_field_name('name')
+            if name:
+                names.add(data[name.start_byte:name.end_byte].decode('utf-8').rsplit('.', 1)[-1])
+    return names
+
+
+def in_test_class(node, data):
+    """Field injection is idiomatic in test classes (Spring's own test docs use it); teams that
+    forbid it mean production components. Detected syntactically, never by file name."""
+    current = node.parent
+    while current is not None:
+        if current.type == 'class_declaration':
+            modifiers = next((c for c in current.named_children if c.type == 'modifiers'), None)
+            if annotation_names(modifiers, data) & TEST_CLASS_ANNOTATIONS:
+                return True
+            body = current.child_by_field_name('body')
+            for member in (body.named_children if body else ()):
+                if member.type == 'method_declaration':
+                    method_modifiers = next((c for c in member.named_children if c.type == 'modifiers'), None)
+                    if annotation_names(method_modifiers, data) & TEST_METHOD_ANNOTATIONS:
+                        return True
+        current = current.parent
+    return False
+
+
+def on_field(node):
+    parent = node.parent
+    return bool(parent and parent.type == 'modifiers' and parent.parent and parent.parent.type == 'field_declaration')
+
+
+def analyze(source, path, policies, catalog=RULES):
     data = source.encode('utf-8')
     tree = Parser(JAVA).parse(data)
     root = tree.root_node
@@ -26,14 +65,19 @@ def analyze(source, path, policies):
         raise JavaSyntaxError(f'Java syntax error near line {error.start_point.row + 1}')
     text = lambda n: data[n.start_byte:n.end_byte].decode('utf-8')
     imports = {}
+    wildcards = set()
+    package = None
     local_names = set()
     for node in walk(root):
+        if node.type == 'package_declaration':
+            name = next((c for c in node.named_children if c.type in ('scoped_identifier', 'identifier')), None)
+            package = text(name) if name else None
         if node.type == 'import_declaration':
             imported = text(node).removeprefix('import').strip().removesuffix(';').strip()
             if imported.startswith('static '):
                 continue
             if imported.endswith('.*'):
-                pass
+                wildcards.add(imported[:-2].strip())
             else:
                 imports[imported.rsplit('.', 1)[-1]] = imported
         if node.type in {'class_declaration', 'interface_declaration', 'annotation_type_declaration', 'enum_declaration', 'record_declaration'}:
@@ -53,22 +97,80 @@ def analyze(source, path, policies):
         if '.' not in name and name in local_names:
             continue
         if not resolved:
-            candidates = {qualified.rsplit('.', 1)[-1] for rule, severity in policies.items() if severity != 'off' for qualified in RULES[rule].get('imports', [])}
-            if name in candidates:
-                raise JavaSyntaxError(f'Cannot resolve @{name} at line {node.start_point.row + 1}; use an explicit import for supported analysis')
+            possible = {qualified.rsplit('.', 1)[0] for rule, severity in policies.items() if severity != 'off'
+                        for qualified in catalog[rule].get('imports', []) if qualified.rsplit('.', 1)[-1] == name}
+            if not possible:
+                continue
+            line = node.start_point.row + 1
+            # In a compilation unit, an unimported simple name can only come from an on-demand
+            # import or the file's own package. If neither could supply the policed annotation,
+            # it is provably another type (e.g. lombok.Value via `import lombok.*`).
+            if not (imports or wildcards or package):
+                raise JavaSyntaxError(f'Cannot resolve @{name} at line {line}: no package or imports (code snippet?). '
+                                      'Add the import, or exclude example files in the policy scope')
+            if possible & (wildcards | {package}):
+                raise JavaSyntaxError(f'Cannot resolve @{name} at line {line}; a wildcard or same-package type may supply it. '
+                                      'Use an explicit import for supported analysis')
             continue
         for rule, severity in policies.items():
-            spec = RULES[rule]
+            spec = catalog[rule]
             if severity == 'off' or resolved not in spec.get('imports', []):
                 continue
-            if rule == 'spring.no-field-injection':
-                parent = node.parent
-                if not parent or parent.type != 'modifiers' or not parent.parent or parent.parent.type != 'field_declaration':
-                    continue
+            if spec.get('target') == 'field' and not on_field(node):
+                continue
+            if spec.get('skip_test_classes') and in_test_class(node, data):
+                continue
             prefix = data[:node.start_byte].decode('utf-8')
             findings.append(dict(rule=rule, severity=severity, path=path,
                 line=node.start_point.row + 1, column=len(prefix.rsplit('\n', 1)[-1]) + 1,
                 kind='code', confidence='syntax', evidence='@' + name,
-                message='Field injection violates the approved constructor-injection policy' if rule == 'spring.no-field-injection' else f'@{name.rsplit(".", 1)[-1]} is prohibited by approved policy',
+                message=spec.get('message') or f'@{name.rsplit(".", 1)[-1]} is prohibited by approved policy',
                 remediation=spec['remediation']))
     return findings
+
+
+# Class body first: the Java grammar also accepts top-level statements, so a bare
+# `@Autowired private Store store;` would otherwise parse as a local variable, not a field.
+SNIPPET_WRAPPERS = (('class Snippet {\n', '\n}'), ('', ''), ('class Snippet { void snippet() {\n', '\n} }'))
+
+
+def analyze_snippet(source, policies, catalog=RULES):
+    """Annotation uses in a documentation code example, as (rule, line, column, evidence).
+
+    Examples omit imports, so names match by their simple name. Annotations that need an
+    argument in the policed library (Spring's @Value) only match with one, which keeps
+    argument-less look-alikes such as Lombok's @Value out. Non-Java text yields nothing."""
+    for prefix, suffix in SNIPPET_WRAPPERS:
+        data = (prefix + source + suffix).encode('utf-8')
+        root = Parser(JAVA).parse(data).root_node
+        if not root.has_error:
+            break
+    else:
+        return []
+    offset = prefix.count('\n')
+    wanted = {}
+    for rule, severity in policies.items():
+        if severity == 'off':
+            continue
+        for qualified in catalog[rule].get('imports', []):
+            wanted.setdefault(qualified.rsplit('.', 1)[-1], set()).add(rule)
+    matches = []
+    for node in walk(root):
+        if node.type not in {'annotation', 'marker_annotation'}:
+            continue
+        name_node = node.child_by_field_name('name')
+        if not name_node:
+            continue
+        name = data[name_node.start_byte:name_node.end_byte].decode('utf-8')
+        for rule in sorted(wanted.get(name.rsplit('.', 1)[-1], ())):
+            spec = catalog[rule]
+            if spec.get('target') == 'field' and not on_field(node):
+                continue
+            if spec.get('skip_test_classes') and in_test_class(node, data):
+                continue
+            if spec.get('snippet_requires_arguments') and node.type != 'annotation':
+                continue
+            line = node.start_point.row - offset
+            prefix_bytes = data[:node.start_byte].decode('utf-8').rsplit('\n', 1)[-1]
+            matches.append((rule, line, len(prefix_bytes) + 1, '@' + name))
+    return matches

@@ -48,8 +48,9 @@ def main(argv=None):
             serve(root, args.port)
             return 0
         if args.command == 'rules':
-            for key, rule in RULES.items():
-                print(f'{key}: {rule["guidance"]}')
+            catalog = configuration.load(root, optional=True).catalog()
+            for key, rule in catalog.items():
+                print(f'{key}: {rule["guidance"]}' + (' (custom)' if rule.get('custom') else ''))
             return 0
         if args.command == 'scan':
             from .discovery import discover
@@ -57,6 +58,7 @@ def main(argv=None):
             return 0
         policy = configuration.load(root)
         rules = policy.active()
+        catalog = policy.catalog()
         if args.command == 'doctor':
             print(f'AgentContract 0.3.0 | Python {sys.version.split()[0]}\nPolicy valid: {len(rules)} approved rule(s)\nJava: Tree-sitter | Python: AST | Instructions: explicit patterns')
             return 0
@@ -64,12 +66,12 @@ def main(argv=None):
             if not rules:
                 raise ValueError('Approve at least one rule before generating guidance')
             if args.write:
-                changed = instructions.sync(root, rules)
+                changed = instructions.sync(root, rules, catalog)
                 print('Updated managed section in AGENTS.md' if changed else 'Guidance already up to date')
             else:
-                print(instructions.guidance(rules))
+                print(instructions.guidance(rules, catalog))
             return 0
-        report = scan(root, rules)
+        report = scan(root, rules, policy.exclude, catalog)
         if not rules:
             report['limitations'] = [*report['limitations'], 'No approved rules: this is not a compliance pass.']
         if args.format == 'json':
@@ -81,7 +83,8 @@ def main(argv=None):
         else:
             lines = [f"{f['severity'].upper()} {f['path']}:{f['line']}:{f['column']} [{f['rule']}; {f['kind']}] {f['message']}" for f in report['findings']]
             lines += [f"SKIPPED {s['path']}: {s['reason']}" for s in report['skipped']]
-            lines.append(f"{len(report['findings'])} finding(s) · {report['analyzed_files']} files analyzed · {len(rules)} approved rules")
+            excluded = f" · {report['excluded_files']} excluded by policy" if report['excluded_files'] else ''
+            lines.append(f"{len(report['findings'])} finding(s) · {report['analyzed_files']} files analyzed{excluded} · {len(rules)} approved rules")
             if not rules:
                 lines.append('No approved rules. Approve policies before checking compliance.')
             rendered = '\n'.join(lines)
@@ -94,4 +97,7 @@ def main(argv=None):
         return exit_code(report)
     except (OSError, ValueError, yaml.YAMLError, RecursionError) as error:
         print(f'agentcontract: {error}', file=sys.stderr)
+        return 2
+    except Exception as error:  # noqa: BLE001 — an uncaught crash would exit 1, which means "violations"
+        print(f'agentcontract: internal error ({type(error).__name__}: {error}). Please report it.', file=sys.stderr)
         return 2

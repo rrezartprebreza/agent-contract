@@ -49,3 +49,20 @@ class AppTests(unittest.TestCase):
         self.request('POST','/api/policy',{'version':1,'rules':{}})
         status,data=self.request('POST','/api/check',{})
         self.assertEqual(status,200); self.assertEqual(json.loads(data)['exit_code'],2)
+    def test_policy_scope_survives_save_and_applies_to_checks(self):
+        policy={'version':1,'exclude':['examples/**'],'rules':{'spring.no-field-injection':{'approved':True,'enabled':True,'severity':'error'}}}
+        self.assertEqual(self.request('POST','/api/policy',policy)[0],200)
+        self.assertEqual(json.loads(self.request('GET','/api/state')[1])['policy']['exclude'],['examples/**'])
+        (self.root/'examples').mkdir()
+        (self.root/'examples'/'Bad.java').write_text('class Bad { @Autowired Store store; }')
+        status,data=self.request('POST','/api/check',{}); result=json.loads(data)
+        self.assertEqual(result['exit_code'],0); self.assertEqual(result['report']['excluded_files'],1)
+    def test_custom_rules_are_listed_and_enforced(self):
+        custom={'custom.no-lombok-data':{'title':'Explicit data classes','annotation':'lombok.Data','guidance':'Do not use @Data.'}}
+        policy={'version':1,'custom':custom,'rules':{'custom.no-lombok-data':{'approved':True,'enabled':True,'severity':'error'}}}
+        self.assertEqual(self.request('POST','/api/policy',policy)[0],200)
+        state=json.loads(self.request('GET','/api/state')[1])
+        self.assertEqual(state['rules']['custom.no-lombok-data']['title'],'Explicit data classes')
+        (self.root/'A.java').write_text('package a;\nimport lombok.Data;\n@Data\nclass A {}')
+        report=json.loads(self.request('POST','/api/check',{})[1])
+        self.assertEqual(report['exit_code'],1); self.assertEqual(report['report']['findings'][0]['rule'],'custom.no-lombok-data')
