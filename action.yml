@@ -1,4 +1,6 @@
-name: AgentAccord
+# Marketplace display name. "AgentAccord" alone is blocked: an unrelated, empty GitHub
+# organization owns that name, and Marketplace names must not match users or organizations.
+name: AgentAccord Check
 description: Check source code and AI agent instructions (skills, AGENTS.md, CLAUDE.md) against your team's approved policy.
 author: Rrezart Prebreza
 branding:
@@ -31,7 +33,7 @@ runs:
       shell: bash
       env:
         ACTION_PATH: ${{ github.action_path }}
-      # Installs the action's own tagged source, so @v0.4.0 runs exactly v0.4.0.
+      # Installs the action's own tagged source, so a pinned tag runs exactly that version.
       run: python -m pip install --disable-pip-version-check --quiet "$ACTION_PATH"
     - name: Check policy
       id: check

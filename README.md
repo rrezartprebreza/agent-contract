@@ -193,7 +193,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: rrezartprebreza/agentaccord@v0.4.0
+      - uses: rrezartprebreza/agentaccord@v0.4.1
 ```
 
 | Input | Default | Meaning |
@@ -202,14 +202,14 @@ jobs:
 | `sarif` | `true` | Upload findings to GitHub code scanning |
 | `python-version` | `3.13` | Python used to run AgentAccord |
 
-The `exit-code` output (0/1/2) is available to later steps. The action installs its own tagged source, so `@v0.4.0` always runs exactly that version.
+The `exit-code` output (0/1/2) is available to later steps. The action installs its own tagged source, so a pinned tag always runs exactly that version. It is listed on the GitHub Marketplace as **AgentAccord Check**.
 
 **pre-commit:**
 
 ```yaml
 repos:
   - repo: https://github.com/rrezartprebreza/agentaccord
-    rev: v0.4.0
+    rev: v0.4.1
     hooks:
       - id: agentaccord
 ```
