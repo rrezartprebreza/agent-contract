@@ -68,12 +68,6 @@ The demo deliberately contains every kind of finding: two conflicting instructio
 
 Open the complete URL the command prints; it carries a per-session token. Four screens walk through the workflow: repository overview, explicit policy approval, agent-guidance preview and update, and findings with search, filters and JSON/SARIF/HTML export.
 
-| Overview | Findings |
-| --- | --- |
-| ![AgentAccord overview screen](https://raw.githubusercontent.com/rrezartprebreza/agentaccord/main/demo/overview-v03.jpg) | ![AgentAccord findings screen](https://raw.githubusercontent.com/rrezartprebreza/agentaccord/main/demo/review-v03.jpg) |
-
-<sub>Screenshots from 0.3, when the project was named AgentContract, before code-example findings, custom rules, scopes, and baselines.</sub>
-
 The server binds only to `127.0.0.1` and to the repository chosen at startup; use `--port 0` for a free port and Ctrl+C to stop. `./run.sh examples/spring-demo` does the same after installation.
 
 ## Use it on your repository
