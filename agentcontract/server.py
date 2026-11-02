@@ -6,7 +6,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlsplit
 import yaml
-from . import configuration, instructions
+from . import baseline, configuration, instructions
 from .engine import scan, exit_code
 from .discovery import discover
 from .reporters import dashboard, sarif
@@ -99,7 +99,7 @@ def make_server(root, port=0):
                     self.send({'saved': True})
                 elif route in ('/api/check', '/api/export'):
                     policy = configuration.load(root)
-                    report = scan(root, policy.active(), policy.exclude, policy.catalog())
+                    report = baseline.apply(scan(root, policy.active(), policy.exclude, policy.catalog()), root)
                     if route == '/api/export':
                         fmt = body.get('format', 'json')
                         if fmt not in {'json', 'sarif', 'html'}:

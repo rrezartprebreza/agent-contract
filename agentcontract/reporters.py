@@ -16,6 +16,8 @@ def sarif(report):
             'locations': [{'physicalLocation': {'artifactLocation': {
                 'uri': quote(PurePosixPath(f['path']).as_posix(), safe='/'), 'uriBaseId': '%SRCROOT%'},
                 'region': {'startLine': f['line'], 'startColumn': f['column']}}}],
+            **({'partialFingerprints': {'agentcontract/v1': f['fingerprint']}} if f.get('fingerprint') else {}),
+            **({'baselineState': 'unchanged' if f.get('baselined') else 'new'} if report.get('baseline') else {}),
             'properties': {'confidence': f['confidence'], 'kind': f['kind']}}
             for f in report['findings']],
         'invocations': [{'executionSuccessful': not bool(report['skipped']) and report.get('approved_rules', 1) > 0,
@@ -25,7 +27,7 @@ def sarif(report):
 
 def dashboard(report):
     esc = lambda value: html.escape(str(value), quote=True)
-    findings = report['findings']
+    findings = [f for f in report['findings'] if not f.get('baselined')]
     errors = sum(f['severity'] == 'error' for f in findings)
     conflicts = sum(f['kind'] == 'instruction' for f in findings)
     cards = []

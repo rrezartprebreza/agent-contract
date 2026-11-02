@@ -74,6 +74,26 @@ The server binds only to `127.0.0.1` and to the repository chosen at startup; us
 
 Nothing becomes blocking just because it is available: a rule runs only after someone approves it, and the starter catalog is never inferred from your code. Then preview the generated guidance and write it into AGENTS.md's managed section. Handwritten instructions are preserved even when they conflict; findings point at those lines for a human to correct.
 
+## Adopt on an existing codebase
+
+A real repository usually has violations on day one. Record them once, and the check fails only on new ones:
+
+```sh
+agentcontract baseline .          # writes .agentcontract-baseline.json — commit it
+agentcontract check .             # exit 0: existing findings are accepted, reported, not blocking
+# …later, after fixing some of them:
+agentcontract baseline . --prune  # removes fixed entries; never adds new ones
+```
+
+```text
+0 finding(s) · 14 accepted by baseline · 127 files analyzed · 143 excluded by policy · 3 approved rules
+```
+
+- **Only new violations fail.** A finding is matched by its rule, file, and the text of its own line, so code moving around the file does not reset it, while editing the violating line makes it new: touched code must comply. Identical lines are counted, so a third copy of a twice-accepted violation is still new.
+- **It can only shrink.** `baseline` refuses to overwrite an existing file and `--prune` never adds entries, so new violations are never silently absorbed.
+- **Nothing is hidden.** Every report states how many findings the baseline accepted and how many entries were fixed; `check --no-baseline` shows everything. Incomplete analysis still exits 2.
+- SARIF results carry `baselineState` (`new`/`unchanged`) and stable `partialFingerprints`, so code scanning tracks findings across line moves.
+
 ## Policy file
 
 ```yaml
@@ -151,7 +171,7 @@ Exit codes are a stable contract:
 | Exit | Meaning |
 | --- | --- |
 | 0 | No blocking violations among configured, supported checks |
-| 1 | Approved policy violations |
+| 1 | Approved policy violations not accepted by the baseline |
 | 2 | Tool or configuration failure, incomplete analysis, or no approved rules |
 
 **GitHub Actions with code scanning annotations:**
@@ -195,7 +215,8 @@ Reports: `--format console|json|html|sarif`. `--output` never overwrites an exis
 ```sh
 agentcontract init [path]       # propose rules (unapproved)
 agentcontract serve [path]      # local app; --port 0 picks a free port
-agentcontract check [path]      # --format console|json|html|sarif, --output FILE
+agentcontract check [path]      # --format console|json|html|sarif, --output FILE, --no-baseline
+agentcontract baseline [path]   # accept existing findings; --prune removes fixed ones
 agentcontract guidance [path]   # preview; --write updates AGENTS.md's managed block
 agentcontract rules [path]      # built-in and custom rules
 agentcontract scan [path]       # languages, manifests and instruction files found
@@ -210,7 +231,7 @@ agentcontract doctor [path]     # versions and policy validity
 - **Hardened local app.** Per-session token, strict Host/Origin checks, content security policy, and loopback-only binding. It is a local development app, not a hosted multi-user service or a sandbox against hostile concurrent filesystem changes. Stop it when finished.
 - Reports can include paths and short evidence; review them before sharing.
 
-This is an early release. TypeScript and C#, convention inference, pull-request diff/baseline analysis, and a full plugin contract are future work; see the [roadmap](docs/ROADMAP.md).
+This is an early release. TypeScript and C#, convention inference, pull-request diff analysis, and a full plugin contract are future work; see the [roadmap](docs/ROADMAP.md).
 
 ## Development
 
@@ -218,7 +239,7 @@ This is an early release. TypeScript and C#, convention inference, pull-request 
 .venv/bin/python -m unittest discover -s tests -v
 ```
 
-Tests cover the analyzers and their false positives, policy validation and migration, scopes, custom rules, code-example detection, guidance preservation, report escaping, SARIF structure, regressions found on real repositories, and real loopback HTTP flows. CI runs them on Linux and macOS with Python 3.12 and 3.13 and checks the CLI exit-code contract against the examples.
+Tests cover the analyzers and their false positives, policy validation and migration, scopes, custom rules, code-example detection, baselines, guidance preservation, report escaping, SARIF structure, regressions found on real repositories, and real loopback HTTP flows. CI runs them on Linux and macOS with Python 3.12 and 3.13 and checks the CLI exit-code contract against the examples.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md): every rule needs a stable ID, explicit approval, actionable remediation, and positive, negative, and false-positive tests.
 

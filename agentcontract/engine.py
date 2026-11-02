@@ -1,4 +1,5 @@
 """Shared analysis engine for CLI and local app. Never runs repository code."""
+import hashlib
 import re
 from . import java_checks, python_checks, instructions
 from .rules import RULES
@@ -51,6 +52,21 @@ def covered_symlink(root, path, rules, catalog=RULES):
     return not any(part in EXCLUDED for part in inside.parts[:-1]) and is_relevant(target.name, target.suffix, rules, catalog)
 
 
+def fingerprint(rule, path, line_text):
+    """Stable across line moves: rule + file + the finding's own line, whitespace-normalized.
+    Editing that line produces a new fingerprint, so touched code must comply."""
+    normalized = ' '.join(line_text.split())
+    return hashlib.sha256(f'{rule}\0{path}\0{normalized}'.encode('utf-8')).hexdigest()[:32]
+
+
+def with_fingerprints(findings, source):
+    lines = re.split(r'\r\n|\r|\n', source)
+    for finding in findings:
+        text = lines[finding['line'] - 1] if 0 < finding['line'] <= len(lines) else ''
+        finding['fingerprint'] = fingerprint(finding['rule'], finding['path'], text)
+    return findings
+
+
 def analyze(source, path, rules, catalog=RULES):
     if path.endswith('.java'):
         return java_checks.analyze(source, path, rules, catalog)
@@ -90,7 +106,7 @@ def scan(root, rules, exclude=(), catalog=RULES):
                 continue
             try:
                 source = path.read_text(encoding='utf-8')
-                findings.extend(analyze(source, rel, rules, catalog))
+                findings.extend(with_fingerprints(analyze(source, rel, rules, catalog), source))
                 analyzed += 1
             except UnicodeError:
                 skipped.append(dict(path=rel, reason='Not UTF-8'))
@@ -108,4 +124,5 @@ def scan(root, rules, exclude=(), catalog=RULES):
 def exit_code(report):
     if report['skipped'] or not report.get('approved_rules', 0):
         return 2
-    return 1 if any(f['severity'] == 'error' for f in report['findings']) else 0
+    # Baselined findings are known, accepted debt: they are reported but never block.
+    return 1 if any(f['severity'] == 'error' and not f.get('baselined') for f in report['findings']) else 0
