@@ -6,9 +6,8 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlsplit
 import yaml
-from . import configuration, instructions
+from . import baseline, configuration, instructions
 from .engine import scan, exit_code
-from .rules import RULES
 from .discovery import discover
 from .reporters import dashboard, sarif
 
@@ -69,8 +68,8 @@ def make_server(root, port=0):
             if route == '/api/state':
                 try:
                     policy = configuration.load(root, optional=True)
-                    self.send(dict(repository=str(root), name=root.name, policy=policy.model_dump(), rules=RULES,
-                        discovery=discover(root), guidance=instructions.guidance(policy.active())))
+                    self.send(dict(repository=str(root), name=root.name, policy=policy.model_dump(), rules=policy.catalog(),
+                        discovery=discover(root), guidance=instructions.guidance(policy.active(), policy.catalog())))
                 except (ValueError, OSError, yaml.YAMLError, RecursionError) as error:
                     self.send({'error': str(error)}, 400)
                 return
@@ -100,7 +99,7 @@ def make_server(root, port=0):
                     self.send({'saved': True})
                 elif route in ('/api/check', '/api/export'):
                     policy = configuration.load(root)
-                    report = scan(root, policy.active())
+                    report = baseline.apply(scan(root, policy.active(), policy.exclude, policy.catalog()), root)
                     if route == '/api/export':
                         fmt = body.get('format', 'json')
                         if fmt not in {'json', 'sarif', 'html'}:
@@ -113,7 +112,7 @@ def make_server(root, port=0):
                     policy = configuration.load(root)
                     if not policy.active():
                         raise ValueError('Approve at least one rule before writing guidance')
-                    changed = instructions.sync(root, policy.active())
+                    changed = instructions.sync(root, policy.active(), policy.catalog())
                     self.send(dict(changed=changed))
                 else:
                     self.send({'error': 'Not found'}, 404)

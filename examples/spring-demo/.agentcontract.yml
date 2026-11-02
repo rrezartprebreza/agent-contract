@@ -1,4 +1,11 @@
 version: 1
+exclude:
+- legacy/**
+custom:
+  custom.no-lombok-data:
+    title: Explicit data classes
+    annotation: lombok.Data
+    guidance: Do not use @Data. Use records or explicit accessors.
 rules:
   spring.no-webmvctest:
     enabled: true
@@ -20,3 +27,7 @@ rules:
     enabled: true
     approved: false
     severity: error
+  custom.no-lombok-data:
+    enabled: true
+    approved: true
+    severity: warning

@@ -1,5 +1,6 @@
 """Python rules use the standard-library AST, without importing scanned code."""
 import ast
+import re
 
 RULES = {
  'python.no-mutable-defaults': ('Mutable default argument', 'Use None as the default and create the collection inside the function.'),
@@ -9,13 +10,15 @@ RULES = {
 
 def analyze(source, path, rules):
     tree = ast.parse(source, filename=path)
+    # Match the parser's line breaks; str.splitlines() also splits on form feeds and U+2028.
+    lines = re.split(r'\r\n|\r|\n', source)
     findings = []
     def add(rule, node, message):
         severity = rules.get(rule, 'off')
         if severity == 'off':
             return
         # AST columns are UTF-8 byte offsets; report Unicode character columns.
-        line = source.splitlines()[node.lineno - 1]
+        line = lines[node.lineno - 1]
         column = len(line.encode('utf-8')[:node.col_offset].decode('utf-8')) + 1
         findings.append(dict(rule=rule, severity=severity, path=path, line=node.lineno,
             column=column, kind='code', confidence='syntax', message=message,
