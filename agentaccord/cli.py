@@ -5,6 +5,7 @@ import sys
 from pathlib import Path
 import yaml
 from . import baseline, configuration, instructions
+from . import __version__
 from .rules import RULES
 from .engine import analyze, scan, exit_code, EXCLUDED
 from .reporters import dashboard, sarif
@@ -19,7 +20,7 @@ def load_policy(root):
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description='AgentAccord — approved policies, consistent guidance, verified code')
-    parser.add_argument('--version', action='version', version='AgentAccord 0.3.0')
+    parser.add_argument('--version', action='version', version=f'AgentAccord {__version__}')
     sub = parser.add_subparsers(dest='command', required=True)
     for command in ('init', 'check', 'baseline', 'guidance', 'scan', 'doctor', 'rules', 'serve'):
         cmd = sub.add_parser(command)
@@ -63,7 +64,7 @@ def main(argv=None):
         rules = policy.active()
         catalog = policy.catalog()
         if args.command == 'doctor':
-            print(f'AgentAccord 0.3.0 | Python {sys.version.split()[0]}\nPolicy valid: {len(rules)} approved rule(s)\nJava: Tree-sitter | Python: AST | Instructions: explicit patterns')
+            print(f'AgentAccord {__version__} | Python {sys.version.split()[0]}\nPolicy valid: {len(rules)} approved rule(s)\nJava: Tree-sitter | Python: AST | Instructions: explicit patterns')
             return 0
         if args.command == 'guidance':
             if not rules:

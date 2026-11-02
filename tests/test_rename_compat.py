@@ -76,3 +76,30 @@ class RenameCompatibilityTests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class VersionTests(unittest.TestCase):
+    """The version lives only in agentaccord.__version__; every surface must report it."""
+
+    def test_cli_sarif_and_app_report_the_single_version(self):
+        from agentaccord import __version__
+        from agentaccord.reporters import sarif
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output), self.assertRaises(SystemExit):
+            main(['--version'])
+        self.assertEqual(output.getvalue().strip(), f'AgentAccord {__version__}')
+        report = dict(findings=[], skipped=[], approved_rules=1)
+        self.assertEqual(sarif(report)['runs'][0]['tool']['driver']['version'], __version__)
+        import http.client, threading
+        from agentaccord.server import make_server
+        with tempfile.TemporaryDirectory() as temp:
+            server = make_server(Path(temp))
+            thread = threading.Thread(target=server.serve_forever, daemon=True)
+            thread.start()
+            try:
+                conn = http.client.HTTPConnection('127.0.0.1', server.server_port, timeout=5)
+                conn.request('GET', '/api/state', headers={'X-AgentAccord-Token': server.token})
+                self.assertEqual(json.loads(conn.getresponse().read())['version'], __version__)
+                conn.close()
+            finally:
+                server.shutdown(); server.server_close(); thread.join()

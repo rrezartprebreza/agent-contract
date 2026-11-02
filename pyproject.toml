@@ -1,17 +1,35 @@
 [build-system]
-requires = ["setuptools>=68"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 [project]
 name = "agentaccord"
-version = "0.3.0"
+dynamic = ["version"]
 description = "Team engineering rules for AI coding agents, checked in skills, AGENTS.md, CLAUDE.md, and code"
 keywords = ["ai-agents", "coding-agents", "agents-md", "claude-code", "agent-skills", "linter", "coding-standards", "spring-boot", "sarif"]
 requires-python = ">=3.12"
 readme = "README.md"
-license = {file = "LICENSE"}
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{name = "Rrezart Prebreza"}]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Environment :: Web Environment",
+    "Intended Audience :: Developers",
+    "Operating System :: MacOS",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Java",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Quality Assurance",
+    "Topic :: Software Development :: Testing",
+]
 dependencies = ["tree-sitter>=0.25,<0.27", "tree-sitter-java>=0.23,<0.24", "PyYAML>=6,<7", "pydantic>=2.10,<3"]
 [project.urls]
+Homepage = "https://github.com/rrezartprebreza/agentaccord"
 Repository = "https://github.com/rrezartprebreza/agentaccord"
+Changelog = "https://github.com/rrezartprebreza/agentaccord/blob/main/CHANGELOG.md"
 Issues = "https://github.com/rrezartprebreza/agentaccord/issues"
 
 [project.scripts]
@@ -21,3 +39,6 @@ include = ["agentaccord*"]
 
 [tool.setuptools.package-data]
 agentaccord = ["web/*.html", "web/*.css", "web/*.js"]
+
+[tool.setuptools.dynamic]
+version = {attr = "agentaccord.__version__"}

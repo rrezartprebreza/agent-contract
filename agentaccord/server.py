@@ -6,7 +6,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlsplit
 import yaml
-from . import baseline, configuration, instructions
+from . import __version__, baseline, configuration, instructions
 from .engine import scan, exit_code
 from .discovery import discover
 from .reporters import dashboard, sarif
@@ -68,7 +68,7 @@ def make_server(root, port=0):
             if route == '/api/state':
                 try:
                     policy = configuration.load(root, optional=True)
-                    self.send(dict(repository=str(root), name=root.name, policy=policy.model_dump(), rules=policy.catalog(),
+                    self.send(dict(version=__version__, repository=str(root), name=root.name, policy=policy.model_dump(), rules=policy.catalog(),
                         discovery=discover(root), guidance=instructions.guidance(policy.active(), policy.catalog())))
                 except (ValueError, OSError, yaml.YAMLError, RecursionError) as error:
                     self.send({'error': str(error)}, 400)
