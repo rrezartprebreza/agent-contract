@@ -29,8 +29,8 @@ jobs:
         shell: bash
         run: |
           set +e
-          agentcontract check examples/spring-demo; demo=$?
-          agentcontract check examples/passing; passing=$?
-          agentcontract check examples/spring-demo --format sarif > /dev/null; sarif=$?
+          agentaccord check examples/spring-demo; demo=$?
+          agentaccord check examples/passing; passing=$?
+          agentaccord check examples/spring-demo --format sarif > /dev/null; sarif=$?
           echo "spring-demo=$demo passing=$passing sarif=$sarif"
           test "$demo" -eq 1 && test "$passing" -eq 0 && test "$sarif" -eq 1

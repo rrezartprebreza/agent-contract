@@ -1,9 +1,9 @@
 import tempfile
 import unittest
 from pathlib import Path
-from agentcontract import configuration as config, instructions
-from agentcontract.engine import analyze, scan
-from agentcontract.java_checks import JavaSyntaxError
+from agentaccord import configuration as config, instructions
+from agentaccord.engine import analyze, scan
+from agentaccord.java_checks import JavaSyntaxError
 
 AUTOWIRED = 'org.springframework.beans.factory.annotation.Autowired'
 RULES = {'spring.no-field-injection': 'error', 'spring.no-value': 'warning', 'spring.no-webmvctest': 'error'}
@@ -63,7 +63,7 @@ class PolicyTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp:
             root=Path(temp)
             for source in invalid:
-                (root/'.agentcontract.yml').write_text(source)
+                (root/'.agentaccord.yml').write_text(source)
                 with self.subTest(source=source), self.assertRaises(ValueError):
                     config.load(root)
 

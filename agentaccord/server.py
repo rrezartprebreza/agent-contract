@@ -51,7 +51,7 @@ def make_server(root, port=0):
             if origin and origin != 'http://' + expected:
                 self.send({'error': 'Cross-origin request rejected'}, 403)
                 return False
-            if api and not secrets.compare_digest(self.headers.get('X-AgentContract-Token', ''), token):
+            if api and not secrets.compare_digest(self.headers.get('X-AgentAccord-Token', ''), token):
                 self.send({'error': 'Session token required'}, 403)
                 return False
             return True
@@ -129,7 +129,7 @@ def serve(root, port):
     if not 0 <= port <= 65535:
         raise ValueError('Port must be between 0 and 65535')
     server = make_server(root, port)
-    print(f'AgentContract local app: {server.url}', flush=True)
+    print(f'AgentAccord local app: {server.url}', flush=True)
     print(f'Repository: {root}\nPress Ctrl+C to stop.', flush=True)
     try:
         server.serve_forever()

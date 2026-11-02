@@ -4,7 +4,7 @@ import tempfile
 import threading
 import unittest
 from pathlib import Path
-from agentcontract.server import make_server
+from agentaccord.server import make_server
 
 class AppTests(unittest.TestCase):
     def setUp(self):
@@ -16,7 +16,7 @@ class AppTests(unittest.TestCase):
     def request(self, method, route, body=None, token=True, extra=None):
         conn=http.client.HTTPConnection('127.0.0.1',self.server.server_port,timeout=5)
         headers={'Content-Type':'application/json'}
-        if token: headers['X-AgentContract-Token']=self.server.token
+        if token: headers['X-AgentAccord-Token']=self.server.token
         if extra: headers.update(extra)
         conn.request(method,route,body=json.dumps(body) if body is not None else None,headers=headers)
         response=conn.getresponse(); content=response.read().decode(); status=response.status; conn.close()
@@ -42,7 +42,7 @@ class AppTests(unittest.TestCase):
         self.assertEqual(self.request('POST','/api/export',{'format':'html'})[0],200)
     def test_invalid_payload_cannot_write_policy(self):
         self.assertEqual(self.request('POST','/api/policy',{'version':1,'rules':{'typo':{}}})[0],400)
-        self.assertFalse((self.root/'.agentcontract.yml').exists())
+        self.assertFalse((self.root/'.agentaccord.yml').exists())
         self.assertEqual(self.request('POST','/api/policy',[],token=False)[0],403)
         self.assertEqual(self.request('POST','/api/guidance',{})[0],400)
     def test_no_approved_rules_is_incomplete(self):

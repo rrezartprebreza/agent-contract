@@ -4,12 +4,15 @@ from .rules import RULES
 from .java_checks import analyze_snippet
 from .configuration import read_regular
 
-START = '<!-- agentcontract:begin -->'
-END = '<!-- agentcontract:end -->'
+START = '<!-- agentaccord:begin -->'
+END = '<!-- agentaccord:end -->'
+# Markers written by AgentContract (the project's former name); migrated on the next sync.
+LEGACY_START = '<!-- agentcontract:begin -->'
+LEGACY_END = '<!-- agentcontract:end -->'
 
 
 def guidance(policies, catalog=RULES):
-    lines = [START, '## Approved engineering policies', '', 'Generated from the approved AgentContract policy.']
+    lines = [START, '## Approved engineering policies', '', 'Generated from the approved AgentAccord policy.']
     lines += [f'- {catalog[rule]["guidance"]} [{rule}; {severity}]' for rule, severity in sorted(policies.items()) if severity != 'off']
     return '\n'.join([*lines, END, ''])
 
@@ -17,14 +20,19 @@ def guidance(policies, catalog=RULES):
 def sync(root, policies, catalog=RULES):
     path = root / 'AGENTS.md'
     original = read_regular(path) if path.exists() or path.is_symlink() else ''
-    if original.count(START) != original.count(END) or original.count(START) > 1:
-        raise ValueError('Malformed AgentContract guidance markers; refusing to modify AGENTS.md')
+    current = original.count(START) + original.count(END)
+    legacy = original.count(LEGACY_START) + original.count(LEGACY_END)
+    if current and legacy:
+        raise ValueError('AGENTS.md contains both AgentAccord and legacy AgentContract markers; keep one block')
+    start_marker, end_marker = (LEGACY_START, LEGACY_END) if legacy else (START, END)
+    if original.count(start_marker) != original.count(end_marker) or original.count(start_marker) > 1:
+        raise ValueError('Malformed AgentAccord guidance markers; refusing to modify AGENTS.md')
     block = guidance(policies, catalog)
-    if START in original:
-        start, end = original.index(START), original.index(END)
+    if start_marker in original:
+        start, end = original.index(start_marker), original.index(end_marker)
         if end < start:
             raise ValueError('Guidance end marker precedes start marker')
-        result = original[:start] + block.rstrip('\n') + original[end + len(END):]
+        result = original[:start] + block.rstrip('\n') + original[end + len(end_marker):]
     else:
         result = original.rstrip('\n') + ('\n\n' if original else '') + block
     if result == original:

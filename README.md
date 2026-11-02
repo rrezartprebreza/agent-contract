@@ -1,22 +1,24 @@
-# AgentContract
+# AgentAccord
 
-**Your team's engineering rules, enforced in the code *and* in the instructions you give AI coding agents.**
+**Team engineering rules for AI coding agents — checked in your skills, `AGENTS.md`, `CLAUDE.md`, and code.**
 
-[![CI](https://github.com/rrezartprebreza/agent-contract/actions/workflows/ci.yml/badge.svg)](https://github.com/rrezartprebreza/agent-contract/actions/workflows/ci.yml)
+[![CI](https://github.com/rrezartprebreza/agentaccord/actions/workflows/ci.yml/badge.svg)](https://github.com/rrezartprebreza/agentaccord/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 ![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue.svg)
 ![Local only](https://img.shields.io/badge/runs-100%25%20local-success.svg)
 
-Coding agents follow `AGENTS.md`, `CLAUDE.md`, and `SKILL.md` files, not your wiki. When those files drift from the rules your team agreed on, agents faithfully produce the code you were trying to prevent. AgentContract keeps three things in agreement:
+Coding agents follow `AGENTS.md`, `CLAUDE.md`, and `SKILL.md` files, not your wiki. When those files drift from the rules your team agreed on, agents faithfully produce the code you were trying to prevent. AgentAccord keeps three things in agreement:
 
 ```mermaid
 flowchart LR
-    P["Approved policy<br/>.agentcontract.yml"] -->|generates| G["Agent guidance<br/>managed block in AGENTS.md"]
+    P["Approved policy<br/>.agentaccord.yml"] -->|generates| G["Agent guidance<br/>managed block in AGENTS.md"]
     P -->|verifies| C["Source code<br/>Java · Python"]
     P -->|verifies| I["Instruction files<br/>sentences + code examples"]
 ```
 
 It is free, MIT-licensed, and fully local: no account, no AI API key, no uploads.
+
+> **Formerly AgentContract.** The project was renamed because another AI-agent project already publishes `agentcontract` on PyPI. Existing repositories keep working: `.agentcontract.yml`, `.agentcontract.toml`, `.agentcontract-baseline.json`, and `agentcontract:begin/end` markers are still read, and the next `guidance --write` migrates the markers. New files use the `agentaccord` names.
 
 ## What it catches
 
@@ -30,9 +32,9 @@ It is free, MIT-licensed, and fully local: no account, no AI API key, no uploads
 ## See it in 60 seconds
 
 ```sh
-git clone https://github.com/rrezartprebreza/agent-contract.git && cd agent-contract
+git clone https://github.com/rrezartprebreza/agentaccord.git && cd agentaccord
 python3 -m venv .venv && .venv/bin/python -m pip install .
-.venv/bin/agentcontract check examples/spring-demo
+.venv/bin/agentaccord check examples/spring-demo
 ```
 
 ```text
@@ -51,25 +53,25 @@ The demo deliberately contains every kind of finding: two conflicting instructio
 ## The local app
 
 ```sh
-.venv/bin/agentcontract serve examples/spring-demo
+.venv/bin/agentaccord serve examples/spring-demo
 ```
 
 Open the complete URL the command prints; it carries a per-session token. Four screens walk through the workflow: repository overview, explicit policy approval, agent-guidance preview and update, and findings with search, filters and JSON/SARIF/HTML export.
 
 | Overview | Findings |
 | --- | --- |
-| ![AgentContract overview screen](demo/overview-v03.jpg) | ![AgentContract findings screen](demo/review-v03.jpg) |
+| ![AgentAccord overview screen](demo/overview-v03.jpg) | ![AgentAccord findings screen](demo/review-v03.jpg) |
 
-<sub>Screenshots from 0.3, before code-example findings, custom rules, and policy scopes were added.</sub>
+<sub>Screenshots from 0.3, when the project was named AgentContract, before code-example findings, custom rules, scopes, and baselines.</sub>
 
 The server binds only to `127.0.0.1` and to the repository chosen at startup; use `--port 0` for a free port and Ctrl+C to stop. `./run.sh examples/spring-demo` does the same after installation.
 
 ## Use it on your repository
 
 ```sh
-.venv/bin/agentcontract init /path/to/project    # proposes rules, all with approved: false
-.venv/bin/agentcontract serve /path/to/project   # approve the conventions your team wants
-.venv/bin/agentcontract check /path/to/project
+.venv/bin/agentaccord init /path/to/project    # proposes rules, all with approved: false
+.venv/bin/agentaccord serve /path/to/project   # approve the conventions your team wants
+.venv/bin/agentaccord check /path/to/project
 ```
 
 Nothing becomes blocking just because it is available: a rule runs only after someone approves it, and the starter catalog is never inferred from your code. Then preview the generated guidance and write it into AGENTS.md's managed section. Handwritten instructions are preserved even when they conflict; findings point at those lines for a human to correct.
@@ -79,10 +81,10 @@ Nothing becomes blocking just because it is available: a rule runs only after so
 A real repository usually has violations on day one. Record them once, and the check fails only on new ones:
 
 ```sh
-agentcontract baseline .          # writes .agentcontract-baseline.json — commit it
-agentcontract check .             # exit 0: existing findings are accepted, reported, not blocking
+agentaccord baseline .          # writes .agentaccord-baseline.json — commit it
+agentaccord check .             # exit 0: existing findings are accepted, reported, not blocking
 # …later, after fixing some of them:
-agentcontract baseline . --prune  # removes fixed entries; never adds new ones
+agentaccord baseline . --prune  # removes fixed entries; never adds new ones
 ```
 
 ```text
@@ -126,7 +128,7 @@ rules:
 | `exclude` | Repository-relative globs. `*` and `?` stay within one path segment, `**` spans segments. Every report states how many files were excluded, so a narrowed scope is never silent. |
 | `custom` | Team-defined rules; IDs look like `custom.no-lombok-data`. They get the same import-aware code check, instruction-sentence check, code-example check, and generated guidance as built-in rules. |
 
-The schema is strict: unknown keys and rule IDs, invalid severities or globs (absolute paths, `..`, duplicates), duplicate YAML keys, anchors/aliases, and unsupported versions are rejected. Policies from 0.1/0.2 (`.agentcontract.toml`) are still read and treated as approved; saving through the app writes `.agentcontract.yml`, which takes precedence. Policies represent team choices: neither `@WebMvcTest` nor `@Value` is universally wrong.
+The schema is strict: unknown keys and rule IDs, invalid severities or globs (absolute paths, `..`, duplicates), duplicate YAML keys, anchors/aliases, and unsupported versions are rejected. Earlier policy files are still read: `.agentcontract.yml` (0.3) as is, and `.agentcontract.toml` (0.1/0.2) as approved rules. Saving writes `.agentaccord.yml`, which then takes precedence; the old file is retained. Policies represent team choices: neither `@WebMvcTest` nor `@Value` is universally wrong.
 
 ## Built-in rules
 
@@ -138,7 +140,7 @@ The schema is strict: unknown keys and rule IDs, invalid severities or globs (ab
 | `python.no-mutable-defaults` | List/dict/set literal defaults, using the Python AST. |
 | `python.require-type-hints` | Missing parameter or return annotations, exempting `self`/`cls`. |
 
-`agentcontract rules /path/to/project` lists built-in and custom rules.
+`agentaccord rules /path/to/project` lists built-in and custom rules.
 
 ## How the analysis works
 
@@ -155,11 +157,11 @@ Findings carry a `kind` (`code` or `instruction`) and a `confidence` (`syntax`, 
 
 ## Agent guidance stays in sync
 
-`agentcontract guidance <path>` previews, and `--write` updates, only the block between these markers in AGENTS.md:
+`agentaccord guidance <path>` previews, and `--write` updates, only the block between these markers in AGENTS.md:
 
 ```text
-<!-- agentcontract:begin -->
-<!-- agentcontract:end -->
+<!-- agentaccord:begin -->
+<!-- agentaccord:end -->
 ```
 
 Text outside the block is preserved. A missing block is appended; malformed or duplicate markers and symlinked targets are refused. Updates are idempotent and atomic.
@@ -177,7 +179,7 @@ Exit codes are a stable contract:
 **GitHub Actions with code scanning annotations:**
 
 ```yaml
-name: AgentContract
+name: AgentAccord
 on: [pull_request]
 permissions:
   contents: read
@@ -190,22 +192,22 @@ jobs:
       - uses: actions/setup-python@v7
         with:
           python-version: "3.13"
-      - run: pip install git+https://github.com/rrezartprebreza/agent-contract.git
-      - run: agentcontract check . --format sarif --output agentcontract.sarif
+      - run: pip install git+https://github.com/rrezartprebreza/agentaccord.git
+      - run: agentaccord check . --format sarif --output agentaccord.sarif
       - uses: github/codeql-action/upload-sarif@v4
         if: always()
         with:
-          sarif_file: agentcontract.sarif
+          sarif_file: agentaccord.sarif
 ```
 
 **pre-commit** (pin `rev` to a commit SHA until releases are tagged):
 
 ```yaml
 repos:
-  - repo: https://github.com/rrezartprebreza/agent-contract
+  - repo: https://github.com/rrezartprebreza/agentaccord
     rev: <commit-sha>
     hooks:
-      - id: agentcontract
+      - id: agentaccord
 ```
 
 Reports: `--format console|json|html|sarif`. `--output` never overwrites an existing file, and the exit code is preserved even when a report was written.
@@ -213,14 +215,14 @@ Reports: `--format console|json|html|sarif`. `--output` never overwrites an exis
 ## Command line
 
 ```sh
-agentcontract init [path]       # propose rules (unapproved)
-agentcontract serve [path]      # local app; --port 0 picks a free port
-agentcontract check [path]      # --format console|json|html|sarif, --output FILE, --no-baseline
-agentcontract baseline [path]   # accept existing findings; --prune removes fixed ones
-agentcontract guidance [path]   # preview; --write updates AGENTS.md's managed block
-agentcontract rules [path]      # built-in and custom rules
-agentcontract scan [path]       # languages, manifests and instruction files found
-agentcontract doctor [path]     # versions and policy validity
+agentaccord init [path]       # propose rules (unapproved)
+agentaccord serve [path]      # local app; --port 0 picks a free port
+agentaccord check [path]      # --format console|json|html|sarif, --output FILE, --no-baseline
+agentaccord baseline [path]   # accept existing findings; --prune removes fixed ones
+agentaccord guidance [path]   # preview; --write updates AGENTS.md's managed block
+agentaccord rules [path]      # built-in and custom rules
+agentaccord scan [path]       # languages, manifests and instruction files found
+agentaccord doctor [path]     # versions and policy validity
 ```
 
 ## Trust, privacy, and limits
@@ -245,6 +247,6 @@ See [CONTRIBUTING.md](CONTRIBUTING.md): every rule needs a stable ID, explicit a
 
 ## Feedback
 
-Try the demo, then a repository whose policies you know. Report false positives, missing rules, or installation problems in [GitHub Issues](https://github.com/rrezartprebreza/agent-contract/issues) with your OS, Python and AgentContract versions, the relevant policy, a minimal example, and expected versus actual behavior; remove secrets and private code first. The most useful feedback is whether you would keep a check enabled in your daily workflow.
+Try the demo, then a repository whose policies you know. Report false positives, missing rules, or installation problems in [GitHub Issues](https://github.com/rrezartprebreza/agentaccord/issues) with your OS, Python and AgentAccord versions, the relevant policy, a minimal example, and expected versus actual behavior; remove secrets and private code first. The most useful feedback is whether you would keep a check enabled in your daily workflow.
 
 MIT licensed. Dependencies retain their own licenses.

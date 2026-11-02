@@ -2,21 +2,22 @@
 requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 [project]
-name = "agentcontract"
+name = "agentaccord"
 version = "0.3.0"
-description = "Local engineering policy verification and agent guidance"
+description = "Team engineering rules for AI coding agents, checked in skills, AGENTS.md, CLAUDE.md, and code"
+keywords = ["ai-agents", "coding-agents", "agents-md", "claude-code", "agent-skills", "linter", "coding-standards", "spring-boot", "sarif"]
 requires-python = ">=3.12"
 readme = "README.md"
 license = {file = "LICENSE"}
 dependencies = ["tree-sitter>=0.25,<0.27", "tree-sitter-java>=0.23,<0.24", "PyYAML>=6,<7", "pydantic>=2.10,<3"]
 [project.urls]
-Repository = "https://github.com/rrezartprebreza/agent-contract"
-Issues = "https://github.com/rrezartprebreza/agent-contract/issues"
+Repository = "https://github.com/rrezartprebreza/agentaccord"
+Issues = "https://github.com/rrezartprebreza/agentaccord/issues"
 
 [project.scripts]
-agentcontract = "agentcontract.cli:main"
+agentaccord = "agentaccord.cli:main"
 [tool.setuptools.packages.find]
-include = ["agentcontract*"]
+include = ["agentaccord*"]
 
 [tool.setuptools.package-data]
-agentcontract = ["web/*.html", "web/*.css", "web/*.js"]
+agentaccord = ["web/*.html", "web/*.css", "web/*.js"]

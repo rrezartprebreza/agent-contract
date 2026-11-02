@@ -90,16 +90,25 @@ def read_regular(path):
     return path.read_text(encoding='utf-8')
 
 
+POLICY_FILE = '.agentaccord.yml'
+# Earlier names, still read so existing repositories keep working. The first match wins;
+# saving always writes POLICY_FILE, which then takes precedence (the old file is retained).
+LEGACY_YAML = '.agentcontract.yml'    # AgentContract 0.3
+LEGACY_TOML = '.agentcontract.toml'   # AgentContract 0.1/0.2
+POLICY_FILES = (POLICY_FILE, LEGACY_YAML, LEGACY_TOML)
+
+
 def load(root, optional=False):
-    path = root / '.agentcontract.yml'
-    if path.exists() or path.is_symlink():
+    path = next((root / name for name in (POLICY_FILE, LEGACY_YAML)
+                 if (root / name).exists() or (root / name).is_symlink()), None)
+    if path is not None:
         source = read_regular(path)
         # No aliases: avoid recursive and expansion-based YAML inputs.
         if any(isinstance(token, (yaml.tokens.AliasToken, yaml.tokens.AnchorToken)) for token in yaml.scan(source)):
             raise ValueError('YAML aliases and anchors are not supported')
         data = yaml.load(source, Loader=UniqueLoader)
         return Policy.model_validate(data)
-    legacy = root / '.agentcontract.toml'
+    legacy = root / LEGACY_TOML
     if legacy.exists() or legacy.is_symlink():
         data = tomllib.loads(read_regular(legacy))
         if set(data) != {'version', 'rules'} or type(data['version']) is not int or data['version'] != 1:
@@ -112,11 +121,11 @@ def load(root, optional=False):
         return Policy(rules={key: RulePolicy(approved=True, enabled=value != 'off', severity='error' if value == 'off' else value) for key, value in rules.items()})
     if optional:
         return Policy()
-    raise ValueError('No policy found. Run agentcontract init, then approve rules in agentcontract serve.')
+    raise ValueError('No policy found. Run agentaccord init, then approve rules in agentaccord serve.')
 
 
 def save(root, policy):
-    target = root / '.agentcontract.yml'
+    target = root / POLICY_FILE
     if target.is_symlink() or (target.exists() and not target.is_file()):
         raise ValueError('Refusing to replace a non-regular policy file')
     data = policy.model_dump()
@@ -129,7 +138,7 @@ def save(root, policy):
         if spec['target'] == 'any':
             del spec['target']
     serialized = yaml.safe_dump(data, sort_keys=False)
-    fd, temporary = tempfile.mkstemp(prefix='.agentcontract-', dir=root)
+    fd, temporary = tempfile.mkstemp(prefix='.agentaccord-', dir=root)
     try:
         with os.fdopen(fd, 'w', encoding='utf-8') as stream:
             stream.write(serialized)
@@ -142,7 +151,7 @@ def atomic_write(path, content):
     if path.is_symlink() or (path.exists() and not path.is_file()):
         raise ValueError('Refusing to replace a non-regular file')
     mode = path.stat().st_mode & 0o777 if path.exists() else 0o644
-    fd, temporary = tempfile.mkstemp(prefix='.agentcontract-', dir=path.parent)
+    fd, temporary = tempfile.mkstemp(prefix='.agentaccord-', dir=path.parent)
     try:
         with os.fdopen(fd, 'w', encoding='utf-8') as stream:
             stream.write(content)

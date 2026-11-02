@@ -12,6 +12,7 @@
 
 ## Delivered after 0.3.0
 
+- Renamed from AgentContract to AgentAccord (`agentcontract` is taken on PyPI by another AI-agent project). Old policy, baseline, and marker names are still read; markers migrate on the next guidance write.
 - Code examples in instruction files: fenced Java is checked as guidance, labelled counter-examples (❌/Bad/Avoid…) are skipped, and findings are non-blocking warnings.
 - Custom annotation rules (`custom.*`) with the same code, instruction, example, and guidance support as built-ins.
 - Policy `exclude` scopes, reported in every output format.
