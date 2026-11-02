@@ -1,0 +1,4 @@
+version = 1
+[rules]
+"spring.no-webmvctest" = "error"
+"spring.no-value" = "warning"

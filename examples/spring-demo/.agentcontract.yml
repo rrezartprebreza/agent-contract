@@ -1,0 +1,22 @@
+version: 1
+rules:
+  spring.no-webmvctest:
+    enabled: true
+    approved: true
+    severity: error
+  spring.no-value:
+    enabled: true
+    approved: true
+    severity: warning
+  spring.no-field-injection:
+    enabled: true
+    approved: true
+    severity: error
+  python.no-mutable-defaults:
+    enabled: true
+    approved: false
+    severity: error
+  python.require-type-hints:
+    enabled: true
+    approved: false
+    severity: error

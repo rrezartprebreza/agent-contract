@@ -1,0 +1,2 @@
+<!-- Discovery fixture only. This sample is not a runnable Spring application. -->
+<project><modelVersion>4.0.0</modelVersion><groupId>demo</groupId><artifactId>orders</artifactId><version>1.0</version></project>

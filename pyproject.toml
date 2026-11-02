@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+[project]
+name = "agentcontract"
+version = "0.3.0"
+description = "Local engineering policy verification and agent guidance"
+requires-python = ">=3.12"
+dependencies = ["tree-sitter>=0.25,<0.27", "tree-sitter-java>=0.23,<0.24", "PyYAML>=6,<7", "pydantic>=2.10,<3"]
+[project.scripts]
+agentcontract = "agentcontract.cli:main"
+[tool.setuptools.packages.find]
+include = ["agentcontract*"]
+
+[tool.setuptools.package-data]
+agentcontract = ["web/*.html", "web/*.css", "web/*.js"]
