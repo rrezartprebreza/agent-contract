@@ -1,0 +1,60 @@
+name: AgentAccord
+description: Check source code and AI agent instructions (skills, AGENTS.md, CLAUDE.md) against your team's approved policy.
+author: Rrezart Prebreza
+branding:
+  icon: check-circle
+  color: green
+
+inputs:
+  path:
+    description: Repository path to check.
+    default: "."
+  sarif:
+    description: "Upload findings to GitHub code scanning. Needs `security-events: write`."
+    default: "true"
+  python-version:
+    description: Python used to run AgentAccord (3.12 or newer).
+    default: "3.13"
+
+outputs:
+  exit-code:
+    description: 0 no blocking findings, 1 policy violations, 2 incomplete analysis or tool failure.
+    value: ${{ steps.check.outputs.exit-code }}
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-python@v7
+      with:
+        python-version: ${{ inputs.python-version }}
+    - name: Install AgentAccord
+      shell: bash
+      env:
+        ACTION_PATH: ${{ github.action_path }}
+      # Installs the action's own tagged source, so @v0.4.0 runs exactly v0.4.0.
+      run: python -m pip install --disable-pip-version-check --quiet "$ACTION_PATH"
+    - name: Check policy
+      id: check
+      shell: bash
+      env:
+        TARGET: ${{ inputs.path }}
+        UPLOAD_SARIF: ${{ inputs.sarif }}
+      run: |
+        set +e
+        agentaccord check "$TARGET"
+        code=$?
+        if [ "$UPLOAD_SARIF" = "true" ]; then
+          agentaccord check "$TARGET" --format sarif > "$RUNNER_TEMP/agentaccord.sarif"
+        fi
+        echo "exit-code=$code" >> "$GITHUB_OUTPUT"
+    - name: Upload to code scanning
+      if: inputs.sarif == 'true'
+      uses: github/codeql-action/upload-sarif@v4
+      with:
+        sarif_file: ${{ runner.temp }}/agentaccord.sarif
+        category: agentaccord
+    - name: Fail on blocking findings
+      shell: bash
+      env:
+        CODE: ${{ steps.check.outputs.exit-code }}
+      run: exit "$CODE"

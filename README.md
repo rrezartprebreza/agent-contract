@@ -29,7 +29,17 @@ It is free, MIT-licensed, and fully local: no account, no AI API key, no uploads
 | Typed configuration | ```` ```java ```` example using `@Value("${url}")` | `@Value("${payments.url}") String url;` |
 | *Your own rule*, e.g. no Lombok `@Data` | `Use @Data for DTOs.` | `@Data public class Money` |
 
+## Install
+
+```sh
+pipx install agentaccord        # or: python3 -m pip install agentaccord
+```
+
+Python 3.12 or newer. Linux and macOS are tested in CI.
+
 ## See it in 60 seconds
+
+The repository ships a demo with every kind of finding:
 
 ```sh
 git clone https://github.com/rrezartprebreza/agentaccord.git && cd agentaccord
@@ -60,7 +70,7 @@ Open the complete URL the command prints; it carries a per-session token. Four s
 
 | Overview | Findings |
 | --- | --- |
-| ![AgentAccord overview screen](demo/overview-v03.jpg) | ![AgentAccord findings screen](demo/review-v03.jpg) |
+| ![AgentAccord overview screen](https://raw.githubusercontent.com/rrezartprebreza/agentaccord/main/demo/overview-v03.jpg) | ![AgentAccord findings screen](https://raw.githubusercontent.com/rrezartprebreza/agentaccord/main/demo/review-v03.jpg) |
 
 <sub>Screenshots from 0.3, when the project was named AgentContract, before code-example findings, custom rules, scopes, and baselines.</sub>
 
@@ -69,9 +79,9 @@ The server binds only to `127.0.0.1` and to the repository chosen at startup; us
 ## Use it on your repository
 
 ```sh
-.venv/bin/agentaccord init /path/to/project    # proposes rules, all with approved: false
-.venv/bin/agentaccord serve /path/to/project   # approve the conventions your team wants
-.venv/bin/agentaccord check /path/to/project
+agentaccord init /path/to/project    # proposes rules, all with approved: false
+agentaccord serve /path/to/project   # approve the conventions your team wants
+agentaccord check /path/to/project
 ```
 
 Nothing becomes blocking just because it is available: a rule runs only after someone approves it, and the starter catalog is never inferred from your code. Then preview the generated guidance and write it into AGENTS.md's managed section. Handwritten instructions are preserved even when they conflict; findings point at those lines for a human to correct.
@@ -176,36 +186,36 @@ Exit codes are a stable contract:
 | 1 | Approved policy violations not accepted by the baseline |
 | 2 | Tool or configuration failure, incomplete analysis, or no approved rules |
 
-**GitHub Actions with code scanning annotations:**
+**GitHub Action**: checks the repository, shows findings as code scanning annotations on pull requests, and fails on blocking findings:
 
 ```yaml
 name: AgentAccord
 on: [pull_request]
 permissions:
   contents: read
-  security-events: write
+  security-events: write   # for the code scanning upload
 jobs:
   policy:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-python@v7
-        with:
-          python-version: "3.13"
-      - run: pip install git+https://github.com/rrezartprebreza/agentaccord.git
-      - run: agentaccord check . --format sarif --output agentaccord.sarif
-      - uses: github/codeql-action/upload-sarif@v4
-        if: always()
-        with:
-          sarif_file: agentaccord.sarif
+      - uses: rrezartprebreza/agentaccord@v0.4.0
 ```
 
-**pre-commit** (pin `rev` to a commit SHA until releases are tagged):
+| Input | Default | Meaning |
+| --- | --- | --- |
+| `path` | `.` | Repository path to check |
+| `sarif` | `true` | Upload findings to GitHub code scanning |
+| `python-version` | `3.13` | Python used to run AgentAccord |
+
+The `exit-code` output (0/1/2) is available to later steps. The action installs its own tagged source, so `@v0.4.0` always runs exactly that version.
+
+**pre-commit:**
 
 ```yaml
 repos:
   - repo: https://github.com/rrezartprebreza/agentaccord
-    rev: <commit-sha>
+    rev: v0.4.0
     hooks:
       - id: agentaccord
 ```
