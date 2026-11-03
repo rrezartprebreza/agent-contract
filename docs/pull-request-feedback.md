@@ -26,7 +26,7 @@ section and HTML report. SARIF marks them unchanged.
 
 ## GitHub Actions
 
-Use two sibling checkouts. The example below uses v0.5.0; pin a reviewed commit
+Use two sibling checkouts. The example below uses v0.6.0; pin a reviewed commit
 SHA for regular use.
 
 ```yaml
@@ -48,7 +48,7 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha }}
           path: current
           persist-credentials: false
-      - uses: rrezartprebreza/agentaccord@v0.5.0
+      - uses: rrezartprebreza/agentaccord@v0.6.0
         id: accord
         with:
           path: current
