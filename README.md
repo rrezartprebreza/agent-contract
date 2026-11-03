@@ -328,7 +328,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: rrezartprebreza/agentaccord@v0.5.0
+      - uses: rrezartprebreza/agentaccord@v0.6.0
 ```
 
 | Input | Default | Meaning |
@@ -352,7 +352,7 @@ The action installs its own tagged source, so a pinned tag always runs exactly t
 ```yaml
 repos:
   - repo: https://github.com/rrezartprebreza/agentaccord
-    rev: v0.5.0
+    rev: v0.6.0
     hooks:
       - id: agentaccord
 ```

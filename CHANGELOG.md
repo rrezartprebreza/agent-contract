@@ -4,19 +4,23 @@ All notable changes to AgentAccord are documented here. The format follows [Keep
 
 ## Unreleased
 
-- The app has three steps instead of six screens: **Project**, **Rules** and **Check**. Rules for languages not in the project and advanced path settings are collapsed, updating AGENTS.md sits under the rules, and the quick check is a tab on **Check**.
-- Java version: detected from `pom.xml`, Gradle, `.java-version`, `.sdkmanrc` or `.tool-versions` (never by running the build), or set with `java.version` in the policy. Shown in the app and reports. Java syntax up to Java 24 is parsed; on a newer target, a file the parser cannot read is reported as incomplete with that reason.
-- `agentaccord serve` and `agentaccord quick` open the app in your default browser, through an owner-only redirect file so the token never appears in a process list. They skip this without a terminal or display (SSH, CI, redirected output); `--no-browser` prints the link only.
-- The app's menu lists the four workflow steps first, with **Open a project** and **Quick check** under **More**. The snapshot hint no longer says symlinked repositories need a local clone.
-- GitHub snapshots with symbolic links open instead of being rejected: links inside the snapshot are kept and never followed; links pointing outside are left broken inside the temporary copy, so a relevant one makes analysis incomplete. Nothing can be written through a link. (Previously any symlink, such as a plugin folder reusing shared skills, blocked the whole repository.)
-- The local app's missing-token error now says to reopen the full link printed by `agentaccord serve`; a new tab or browser opened from the address bar has no token.
-- README documents the Action's `base-path` input and `report-path` output, and why pull requests should use the base checkout's policy.
+## [0.6.0] - 2026-11-03
 
-- Add local-folder and public GitHub snapshot connections with separate workspace sessions, bounded safe archive extraction, and temporary snapshot cleanup.
-- Show language support separately from discovery and add a draft-only teaching-repository path preset.
+### Added
 
-- Add a local file and pasted-text check with explicit rule selection, language groups, bounded inputs, and an isolated temporary workspace (`agentaccord quick`).
-- Add Python bare-except checks and strict JSON syntax/duplicate-key validation; report unsupported quick-check inputs explicitly.
+- **A simpler app in three steps: Project, Rules and Check.** Rules for languages the project does not use and advanced path settings are collapsed, updating AGENTS.md sits under the rules, and each rule has a plain On switch.
+- **Java version.** Detected from `pom.xml`, Gradle, `.java-version`, `.sdkmanrc` or `.tool-versions` without running the build, or set with `java.version` in the policy. Shown in the app and in reports (`java`). Java syntax up to Java 24 is parsed; on a newer target, a file the parser cannot read is reported as incomplete with that reason, never as passing.
+- **Open a project from the app.** Connect a local folder or a public GitHub snapshot, each in its own workspace session, with bounded safe archive extraction and temporary snapshot cleanup. Symbolic links inside a snapshot are kept and never followed; links pointing outside are left broken, so a relevant one makes analysis incomplete.
+- **Quick check** (`agentaccord quick`, or **Check → A file or pasted text**): check a skill or file with explicit rule selection, language groups, bounded inputs and an isolated temporary workspace.
+- Python bare-except check and strict JSON syntax and duplicate-key validation. Unsupported quick-check inputs are reported explicitly.
+- A draft-only path preset for teaching repositories.
+
+### Changed
+
+- `agentaccord serve` and `agentaccord quick` open the app in your default browser, through an owner-only redirect file so the token never appears in a process list. This is skipped without a terminal or display (SSH, CI, redirected output); `--no-browser` prints the link only.
+- Language support is shown separately from discovery.
+- A missing session token now explains how to recover: reopen the full link printed by `agentaccord serve`.
+- The README documents the Action's `base-path` input and `report-path` output.
 
 ## [0.5.0] - 2026-11-03
 
@@ -86,6 +90,7 @@ First public release, as AgentContract.
 - Managed guidance synchronization that preserves handwritten content.
 - Console, JSON, HTML, and SARIF reports.
 
+[0.6.0]: https://github.com/rrezartprebreza/agentaccord/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/rrezartprebreza/agentaccord/compare/v0.4.0...v0.5.0
 [0.4.1]: https://github.com/rrezartprebreza/agentaccord/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/rrezartprebreza/agentaccord/releases/tag/v0.4.0
