@@ -4,6 +4,9 @@ All notable changes to AgentAccord are documented here. The format follows [Keep
 
 ## Unreleased
 
+- GitHub snapshots with symbolic links open instead of being rejected: links inside the snapshot are kept and never followed; links pointing outside are left broken inside the temporary copy, so a relevant one makes analysis incomplete. Nothing can be written through a link. (Previously any symlink, such as a plugin folder reusing shared skills, blocked the whole repository.)
+- README documents the Action's `base-path` input and `report-path` output, and why pull requests should use the base checkout's policy.
+
 - Add local-folder and public GitHub snapshot connections with separate workspace sessions, bounded safe archive extraction, and temporary snapshot cleanup.
 - Show language support separately from discovery and add a draft-only teaching-repository path preset.
 

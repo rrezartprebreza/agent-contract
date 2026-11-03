@@ -1,4 +1,5 @@
 import io
+import os
 import json
 import stat
 import tempfile
@@ -9,9 +10,15 @@ import http.client
 from pathlib import Path
 from unittest.mock import patch, MagicMock
 from urllib.request import Request
-from agentaccord.projects import github_repository, unpack, prepare, GitHubRedirects, download
+from agentaccord.projects import OUTSIDE_LINK, github_repository, unpack, prepare, GitHubRedirects, download
+from agentaccord.engine import exit_code, scan
 from agentaccord.server import make_server
 import test_server
+
+
+def symlink(name):
+    info=zipfile.ZipInfo(name);info.create_system=3;info.external_attr=(stat.S_IFLNK|0o777)<<16
+    return info
 
 
 def archive(items):
@@ -50,9 +57,13 @@ class ProjectTests(unittest.TestCase):
             with tempfile.TemporaryDirectory() as folder:
                 with self.assertRaises(ValueError):unpack(archive([('project/okay','text'),(name,'bad')]),Path(folder))
                 self.assertEqual(list(Path(folder).iterdir()),[])
-        link=zipfile.ZipInfo('project/link');link.create_system=3;link.external_attr=(stat.S_IFLNK|0o777)<<16
         with tempfile.TemporaryDirectory() as folder:
-            with self.assertRaises(ValueError):unpack(archive([(link,'/etc/passwd')]),Path(folder))
+            # An absolute link is recreated broken, inside the snapshot -- never to the host path.
+            unpack(archive([('project/',''),(symlink('project/link'),'/etc/passwd')]),Path(folder))
+            link=Path(folder)/'link'
+            self.assertTrue(link.is_symlink())
+            self.assertEqual(os.readlink(link),OUTSIDE_LINK)
+            self.assertFalse(link.exists())
         for items in [[('a/x','1'),('b/y','2')],[('a/X','1'),('a/x','2')]]:
             with tempfile.TemporaryDirectory() as folder:
                 with self.assertRaises(ValueError):unpack(archive(items),Path(folder))
@@ -130,3 +141,43 @@ class ProjectHTTPTests(unittest.TestCase):
         root=Path(json.loads(body)['repository'])
         self.server.shutdown();self.server.server_close()
         self.assertFalse(root.exists())
+
+
+class SnapshotLinkTests(unittest.TestCase):
+    """Real skills repositories link plugin folders to shared skills; snapshots must accept them."""
+    RULES={'spring.no-field-injection':'error'}
+
+    def unpack_to(self, items):
+        folder=tempfile.TemporaryDirectory(); self.addCleanup(folder.cleanup)
+        root=Path(folder.name); return root, unpack(archive(items),root)
+
+    def test_links_inside_the_snapshot_are_kept_and_covered(self):
+        root,stats=self.unpack_to([('repo/',''),('repo/skills/a/SKILL.md','Use field injection.\n'),
+            ('repo/AGENTS.md','Use field injection.\n'),(symlink('repo/plugins/p/skills'),'../../skills'),
+            (symlink('repo/CLAUDE.md'),'AGENTS.md')])
+        self.assertEqual(stats,{'links':2,'outside_links':0})
+        self.assertEqual(os.readlink(root/'plugins'/'p'/'skills'),'../../skills')
+        report=scan(root.resolve(),self.RULES)
+        self.assertEqual(report['skipped'],[])
+        self.assertEqual(sorted(f['path'] for f in report['findings']),['AGENTS.md','skills/a/SKILL.md'])
+        self.assertEqual(exit_code(report),1)
+
+    def test_relevant_link_leaving_the_snapshot_makes_analysis_incomplete(self):
+        root,stats=self.unpack_to([('repo/',''),('repo/A.java','class A {}'),(symlink('repo/AGENTS.md'),'../../../home/user/notes.md')])
+        self.assertEqual(stats['outside_links'],1)
+        self.assertEqual(os.readlink(root/'AGENTS.md'),OUTSIDE_LINK)
+        report=scan(root.resolve(),self.RULES)
+        self.assertEqual([s['path'] for s in report['skipped']],['AGENTS.md'])
+        self.assertEqual(exit_code(report),2)
+
+    def test_nothing_can_be_written_through_a_link(self):
+        for items in [[('repo/',''),(symlink('repo/out'),'/tmp'),('repo/out/evil.txt','x')],
+                      [('repo/',''),(symlink('repo/Out'),'docs'),('repo/out/evil.txt','x')]]:
+            with tempfile.TemporaryDirectory() as folder:
+                with self.assertRaisesRegex(ValueError,'inside a symbolic link'):unpack(archive(items),Path(folder))
+                self.assertEqual(list(Path(folder).iterdir()),[])
+
+    def test_malformed_links_are_rejected(self):
+        for target in ['a'*5000,'bad\x00target','dir\\x','']:
+            with tempfile.TemporaryDirectory() as folder, self.subTest(target=target[:20]):
+                with self.assertRaises(ValueError):unpack(archive([('repo/',''),(symlink('repo/link'),target)]),Path(folder))

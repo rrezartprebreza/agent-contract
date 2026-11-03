@@ -54,7 +54,7 @@ jobs:
           path: current
           base-path: base
           sarif: "false"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always() && steps.accord.outputs.report-path != ''
         with:
           name: agentaccord-findings
