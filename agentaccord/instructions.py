@@ -2,6 +2,11 @@
 import re
 from .rules import RULES
 from .java_checks import analyze_snippet
+from . import python_checks, json_checks
+
+class InstructionSyntaxError(ValueError):
+    pass
+
 from .configuration import read_regular
 
 START = '<!-- agentaccord:begin -->'
@@ -46,7 +51,7 @@ def sync(root, policies, catalog=RULES):
 # A labelled counter-example is teaching material, not guidance. ✅/Good wins over ❌/Bad.
 NEGATIVE = re.compile(r"❌|✗|⛔|\b(?:bad|wrong|incorrect|avoid|anti-?pattern|don'?t|do not|never|before|without)\b", re.I)
 POSITIVE = re.compile(r'✅|✔|\b(?:good|correct|recommended|preferred|after)\b', re.I)
-EXAMPLE_LANGUAGES = {'', 'java'}
+EXAMPLE_LANGUAGES = {'', 'java', 'python', 'py', 'json'}
 
 
 def counter_example(block_lines, context):
@@ -129,6 +134,23 @@ def example_findings(block, start, language, context, path, policies, catalog):
     if language not in EXAMPLE_LANGUAGES or counter_example(block, context):
         return []
     findings = []
+    if language in {'python', 'py', 'json'}:
+        target_language = 'JSON' if language == 'json' else 'Python'
+        active = {rule: severity for rule, severity in policies.items() if catalog[rule]['language'] == target_language}
+        if not active:
+            return []
+        analyzer = json_checks.analyze if language == 'json' else python_checks.analyze
+        try:
+            matches = analyzer('\n'.join(block), path, active)
+        except (ValueError, SyntaxError, RecursionError) as error:
+            raise InstructionSyntaxError(f'{target_language} example starting at line {start} could not be parsed: {str(error)[:160]}') from error
+        for match in matches:
+            match.update(line=start + match['line'] - 1, severity='warning', kind='instruction', confidence='example')
+            if language == 'json':
+                match['message'] = match['message'].replace('document-level location', 'code-block start location')
+                match['remediation'] = match['remediation'].replace('document start', 'code-block start')
+            match['message'] = 'Code example: ' + match['message']
+        return matches
     for rule, index, column, evidence in analyze_snippet('\n'.join(block), policies, catalog):
         findings.append(dict(rule=rule, severity='warning', path=path, line=start + index,
             column=column, kind='instruction', confidence='example',

@@ -22,9 +22,10 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description='AgentAccord — approved policies, consistent guidance, verified code')
     parser.add_argument('--version', action='version', version=f'AgentAccord {__version__}')
     sub = parser.add_subparsers(dest='command', required=True)
-    for command in ('init', 'check', 'baseline', 'guidance', 'scan', 'doctor', 'rules', 'serve'):
+    for command in ('init', 'check', 'baseline', 'guidance', 'scan', 'doctor', 'rules', 'serve', 'quick'):
         cmd = sub.add_parser(command)
-        cmd.add_argument('path', nargs='?', default='.')
+        if command != 'quick':
+            cmd.add_argument('path', nargs='?', default='.')
         if command == 'check':
             cmd.add_argument('--format', choices=['console', 'json', 'html', 'sarif', 'markdown', 'github'], default='console')
             cmd.add_argument('--output', type=Path, help='Create a new report file')
@@ -34,10 +35,16 @@ def main(argv=None):
             cmd.add_argument('--prune', action='store_true', help='Remove fixed entries; never adds new ones')
         if command == 'guidance':
             cmd.add_argument('--write', action='store_true', help='Update only the managed section of AGENTS.md')
-        if command == 'serve':
+        if command in ('serve', 'quick'):
             cmd.add_argument('--port', type=int, default=8765)
     args = parser.parse_args(argv)
     try:
+        if args.command == 'quick':
+            from tempfile import TemporaryDirectory
+            from .server import serve
+            with TemporaryDirectory(prefix='agentaccord-workspace-') as directory:
+                serve(Path(directory), args.port, quick=True)
+            return 0
         root = Path(args.path).resolve(strict=True)
         if not root.is_dir():
             raise ValueError('Repository path must be a directory')

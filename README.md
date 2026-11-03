@@ -47,6 +47,32 @@ pipx install agentaccord        # or: python3 -m pip install agentaccord
 
 Python 3.12 or newer. Linux and macOS are tested in CI.
 
+## Check a skill or file without a repository
+
+Run `agentaccord quick` and open the complete local URL it prints. Select Markdown,
+Java, Python, or JSON files, or paste text with a filename. Choose the rules for this
+check, then select **Check selected text**. **Load a teaching example** provides a
+small Java example; select **Typed configuration** to see its warning.
+
+Text is sent only to the loopback app. Temporary files are removed after each check;
+project policies, guidance, and baselines are not changed. Limits are 20 files,
+100 KB per file and 400 KB total, UTF-8 only. No archives or code execution.
+The same **Check a skill** screen is available in the project workspace.
+
+| Input | Supported checks |
+| --- | --- |
+| Markdown skills and instructions | Explicit Java instruction-conflict patterns and Java/Python/JSON fences; not arbitrary prose or other fenced languages |
+| Java files | Built-in Spring annotation rules in teaching-example mode; warnings, not resolved project-wide types |
+| Python files | Mutable literal defaults, missing function type hints, and bare `except` clauses |
+| JSON files | Strict JSON parsing and duplicate keys, including nested objects; duplicate findings use document-start locations |
+
+Rules are grouped by language and must be explicitly selected. Unsupported files,
+files without a selected language rule, and parse failures are reported as incomplete.
+JSON validation does not validate an application's schema or configuration values.
+JavaScript, TypeScript, YAML and other language analyzers are not yet supported.
+Repository policies can also enable `python.no-bare-except` and
+`json.no-duplicate-keys` with the existing approval, severity, and path settings.
+
 ## See it in 60 seconds
 
 The repository ships a demo with every kind of finding:

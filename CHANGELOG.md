@@ -2,6 +2,11 @@
 
 All notable changes to AgentAccord are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow [Semantic Versioning](https://semver.org/).
 
+## Unreleased
+
+- Add a local file and pasted-text check with explicit rule selection, language groups, bounded inputs, and an isolated temporary workspace (`agentaccord quick`).
+- Add Python bare-except checks and strict JSON syntax/duplicate-key validation; report unsupported quick-check inputs explicitly.
+
 ## [0.5.0] - 2026-11-03
 
 ### Added
