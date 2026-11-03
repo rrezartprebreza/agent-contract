@@ -58,3 +58,35 @@ jobs:
         run: |
           echo "exit-code=$CODE outcome=$OUTCOME"
           test "$CODE" = "1" && test "$OUTCOME" = "failure"
+
+      - name: Prepare base and head comparison fixtures
+        shell: bash
+        run: |
+          python - <<'PYTHON'
+          from pathlib import Path
+          import shutil
+          base=Path('.agentaccord-ci/base')
+          head=Path('.agentaccord-ci/head')
+          shutil.copytree('examples/spring-demo', base)
+          shutil.copytree('examples/spring-demo', head)
+          PYTHON
+      - name: Existing conflicts do not block the comparison
+        id: comparison
+        uses: ./
+        with:
+          path: .agentaccord-ci/head
+          base-path: .agentaccord-ci/base
+          sarif: "false"
+      - name: Verify comparison output
+        shell: bash
+        env:
+          REPORT: ${{ steps.comparison.outputs.report-path }}
+        run: |
+          python - <<'PYTHON'
+          import json, os
+          from pathlib import Path
+          report=json.loads(Path(os.environ['REPORT']).read_text())
+          assert report['comparison']['new'] == 0
+          assert report['comparison']['existing'] > 0
+          assert all(f['change'] == 'existing' for f in report['findings'])
+          PYTHON

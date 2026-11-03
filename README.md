@@ -70,6 +70,12 @@ WARNING src/OrderService.java:10:5 [spring.no-value; code] @Value is prohibited 
 
 The demo deliberately contains every kind of finding: two conflicting instruction sentences, a code example that teaches a prohibited pattern, a custom rule, code violations, and a legacy directory excluded by the policy scope. Its AGENTS.md also contains a ❌ counter-example, which is correctly **not** flagged. The demo files are analysis fixtures, not a runnable Spring application.
 
+## Pull-request feedback
+
+Compare two separate checkouts to focus on new conflicts while retaining existing
+findings. The base checkout policy is used for both scans. The GitHub Action emits
+file annotations and a grouped job summary. See the [PR setup and limitations](docs/pull-request-feedback.md).
+
 ## The local app
 
 Finding cards show the matched source line, approved policy and scope, confidence

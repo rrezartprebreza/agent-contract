@@ -26,8 +26,9 @@ def main(argv=None):
         cmd = sub.add_parser(command)
         cmd.add_argument('path', nargs='?', default='.')
         if command == 'check':
-            cmd.add_argument('--format', choices=['console', 'json', 'html', 'sarif'], default='console')
+            cmd.add_argument('--format', choices=['console', 'json', 'html', 'sarif', 'markdown', 'github'], default='console')
             cmd.add_argument('--output', type=Path, help='Create a new report file')
+            cmd.add_argument('--compare-to', type=Path, help='Base checkout; compare both snapshots using its approved policy')
             cmd.add_argument('--no-baseline', action='store_true', help='Report every finding, ignoring the baseline')
         if command == 'baseline':
             cmd.add_argument('--prune', action='store_true', help='Remove fixed entries; never adds new ones')
@@ -60,7 +61,8 @@ def main(argv=None):
             from .discovery import discover
             print(json.dumps(discover(root), indent=2))
             return 0
-        policy = configuration.load(root)
+        base_root = args.compare_to if args.command == 'check' else None
+        policy = configuration.load(base_root.resolve(strict=True) if base_root else root)
         rules = policy.active()
         catalog = policy.catalog()
         if args.command == 'doctor':
@@ -75,7 +77,11 @@ def main(argv=None):
             else:
                 print(instructions.guidance(rules, catalog))
             return 0
-        report = scan(root, rules, policy.exclude, catalog, policy.examples)
+        if base_root:
+            from .comparison import compare
+            report, policy = compare(root, base_root)
+        else:
+            report = scan(root, rules, policy.exclude, catalog, policy.examples)
         if args.command == 'baseline':
             if args.prune:
                 removed = baseline.prune(root, report)
@@ -86,7 +92,7 @@ def main(argv=None):
             if report['skipped']:
                 print(f'Note: {len(report["skipped"])} file(s) could not be analyzed; checks stay incomplete until they are fixed or excluded.')
             return 0
-        if not args.no_baseline:
+        if not base_root and not args.no_baseline:
             baseline.apply(report, root)
         if not rules:
             report['limitations'] = [*report['limitations'], 'No approved rules: this is not a compliance pass.']
@@ -94,15 +100,18 @@ def main(argv=None):
             rendered = json.dumps(report, indent=2)
         elif args.format == 'sarif':
             rendered = json.dumps(sarif(report), indent=2)
+        elif args.format in ('markdown', 'github'):
+            from .pr_reports import summary, annotations
+            rendered = summary(report) if args.format == 'markdown' else annotations(report)
         elif args.format == 'html':
             rendered = dashboard(report)
         else:
             lines = [f"{f['severity'].upper()} {f['path']}:{f['line']}:{f['column']} [{f['rule']}; {f['kind']}] {f['message']}"
-                     for f in report['findings'] if not f.get('baselined')]
+                     for f in report['findings'] if not f.get('baselined') and f.get('change') != 'existing']
             lines += [f"SKIPPED {s['path']}: {s['reason']}" for s in report['skipped']]
             excluded = f" · {report['excluded_files']} excluded by policy" if report['excluded_files'] else ''
             known = report.get('baseline') or {}
-            new = sum(not f.get('baselined') for f in report['findings'])
+            new = sum(not f.get('baselined') and f.get('change') != 'existing' for f in report['findings'])
             accepted = f" · {known['accepted']} accepted by baseline" if known.get('accepted') else ''
             lines.append(f"{new} finding(s){accepted} · {report['analyzed_files']} files analyzed{excluded} · {len(rules)} approved rules")
             if policy.examples.java:
@@ -110,6 +119,10 @@ def main(argv=None):
                              f"{len(report['counter_example_files'])} configured counter-example files omitted")
             if report['rule_scope_omissions']:
                 lines.append(f"{len(report['rule_scope_omissions'])} files have rules omitted by per-rule path scopes")
+            if report.get('comparison'):
+                c = report['comparison']
+                lines.append(f"Comparison: {c['new']} new · {c['existing']} existing · {c['resolved']} absent prior occurrences (base policy)")
+                lines += [f"BASE SKIPPED {s['path']}: {s['reason']}" for s in c['base_skipped']]
             if known.get('stale'):
                 lines.append(f"{known['stale']} baseline entries were fixed: run agentaccord baseline --prune")
             if not rules:

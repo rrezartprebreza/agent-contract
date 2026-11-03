@@ -194,7 +194,7 @@ def scan(root, rules, exclude=(), catalog=RULES, examples=None, *, capture_scope
 
 
 def exit_code(report):
-    if report['skipped'] or not report.get('approved_rules', 0):
+    if report['skipped'] or report.get('comparison', {}).get('base_skipped') or not report.get('approved_rules', 0):
         return 2
     # Baselined findings are known, accepted debt: they are reported but never block.
-    return 1 if any(f['severity'] == 'error' and not f.get('baselined') for f in report['findings']) else 0
+    return 1 if any(f['severity'] == 'error' and not f.get('baselined') and f.get('change') != 'existing' for f in report['findings']) else 0

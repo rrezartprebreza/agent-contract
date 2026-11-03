@@ -11,6 +11,9 @@ inputs:
   path:
     description: Repository path to check.
     default: "."
+  base-path:
+    description: "Optional separate base checkout. Uses its approved policy for both snapshots and blocks only new findings."
+    default: ""
   sarif:
     description: "Upload findings to GitHub code scanning. Needs `security-events: write`."
     default: "true"
@@ -19,6 +22,9 @@ inputs:
     default: "3.13"
 
 outputs:
+  report-path:
+    description: JSON report containing all new and existing findings.
+    value: ${{ steps.check.outputs.report-path }}
   exit-code:
     description: 0 no blocking findings, 1 policy violations, 2 incomplete analysis or tool failure.
     value: ${{ steps.check.outputs.exit-code }}
@@ -40,20 +46,14 @@ runs:
       shell: bash
       env:
         TARGET: ${{ inputs.path }}
-        UPLOAD_SARIF: ${{ inputs.sarif }}
-      run: |
-        set +e
-        agentaccord check "$TARGET"
-        code=$?
-        if [ "$UPLOAD_SARIF" = "true" ]; then
-          agentaccord check "$TARGET" --format sarif > "$RUNNER_TEMP/agentaccord.sarif"
-        fi
-        echo "exit-code=$code" >> "$GITHUB_OUTPUT"
+        BASE_TARGET: ${{ inputs.base-path }}
+      # Isolated mode prevents the scanned checkout from shadowing the installed package.
+      run: python -I -m agentaccord.github_action
     - name: Upload to code scanning
-      if: inputs.sarif == 'true'
+      if: inputs.sarif == 'true' && steps.check.outputs.sarif-path != ''
       uses: github/codeql-action/upload-sarif@v4
       with:
-        sarif_file: ${{ runner.temp }}/agentaccord.sarif
+        sarif_file: ${{ steps.check.outputs.sarif-path }}
         category: agentaccord
     - name: Fail on blocking findings
       shell: bash
