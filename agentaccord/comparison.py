@@ -12,8 +12,8 @@ def compare(root, base_root):
         raise ValueError('Compare two separate, non-overlapping repository checkouts')
     policy = configuration.load(base_root)
     rules, catalog = policy.active(), policy.catalog()
-    previous = scan(base_root, rules, policy.exclude, catalog, policy.examples)
-    current = scan(root, rules, policy.exclude, catalog, policy.examples)
+    previous = scan(base_root, rules, policy.exclude, catalog, policy.examples, java_version=policy.java.version)
+    current = scan(root, rules, policy.exclude, catalog, policy.examples, java_version=policy.java.version)
     remaining = Counter(f['fingerprint'] for f in previous['findings'])
     existing = 0
     for finding in current['findings']:

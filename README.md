@@ -57,7 +57,7 @@ small Java example; select **Typed configuration** to see its warning.
 Text is sent only to the loopback app. Temporary files are removed after each check;
 project policies, guidance, and baselines are not changed. Limits are 20 files,
 100 KB per file and 400 KB total, UTF-8 only. No archives or code execution.
-The same screen is available in the project workspace under **More → Quick check**.
+The same screen is available in the project workspace under **Check → A file or pasted text**.
 
 | Input | Supported checks |
 | --- | --- |
@@ -75,8 +75,8 @@ Repository policies can also enable `python.no-bare-except` and
 
 ## Connect a project from the app
 
-Select **Open a project** from either `agentaccord quick` or an existing project
-workspace. Enter an absolute local folder path or a public repository URL such as
+Select **Project → Open a different project** in an existing workspace, or
+**Project → Open a project** in `agentaccord quick`. Enter an absolute local folder path or a public repository URL such as
 `https://github.com/owner/repository`, then open the connected workspace.
 Each connection has a separate loopback server, session token, policy, and results.
 Opening a local folder does not write to it; saving policy or guidance later does.
@@ -142,7 +142,7 @@ claiming that every match is a bug. JSON reports include a source excerpt (up to
 .venv/bin/agentaccord serve examples/spring-demo
 ```
 
-It opens in your default browser. The printed link carries a per-session token: to use another browser or tab, open that complete link, including `#token=…`, because the address bar hides it after the first load. `--no-browser` only prints the link. Four screens walk through the workflow: repository overview, explicit policy approval, agent-guidance preview and update, and findings with search, filters and JSON/SARIF/HTML export.
+It opens in your default browser. The printed link carries a per-session token: to use another browser or tab, open that complete link, including `#token=…`, because the address bar hides it after the first load. `--no-browser` only prints the link. The app has three steps: **Project** (detected languages, Java version and AI instruction files), **Rules** (turn rules on, optionally set the Java version, then update AGENTS.md for agents) and **Check** (findings with evidence, search, filters and JSON/SARIF/HTML export, or a quick check of a single file).
 
 The server binds only to `127.0.0.1` with each workspace bound to its selected folder; use `--port 0` for a free port and Ctrl+C to stop. `./run.sh examples/spring-demo` does the same after installation.
 
@@ -200,12 +200,17 @@ rules:
   spring.no-webmvctest:      {enabled: true, approved: true, severity: error}
   spring.no-value:           {enabled: true, approved: false, severity: warning}  # proposed: does not run
   custom.no-lombok-data:     {enabled: true, approved: true, severity: warning}
+
+# Optional: the Java release your code targets. Omit it to use the build files.
+java:
+  version: 21
 ```
 
 | Key | Meaning |
 | --- | --- |
 | `rules` | Built-in or custom rule IDs with `enabled`, `approved`, and `severity` (`error` blocks, `warning` reports). |
 | `exclude` | Repository-relative globs. `*` and `?` stay within one path segment, `**` spans segments. Every report states how many files were excluded, so a narrowed scope is never silent. |
+| `java.version` | The Java release to check against. Without it, AgentAccord reads the version your project declares: `maven.compiler.release`, `release`, `java.version` or `source` in `pom.xml`; the toolchain, `jvmToolchain` or `sourceCompatibility` in Gradle; or `.java-version`, `.sdkmanrc` and `.tool-versions`. The build is never run. Rules work the same on every version. Java syntax up to Java 24 is parsed; on a newer target, files using newer syntax are reported as incomplete (exit 2), never as passing. Reports include the version used in `java`. |
 | `custom` | Team-defined rules; IDs look like `custom.no-lombok-data`. They get the same import-aware code check, instruction-sentence check, code-example check, and generated guidance as built-in rules. |
 
 ### Teaching repositories and rule scopes

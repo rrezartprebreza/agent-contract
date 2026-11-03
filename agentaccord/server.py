@@ -15,7 +15,7 @@ from pydantic import ValidationError
 from . import __version__, baseline, configuration, instructions
 from .engine import scan, exit_code
 from .quickcheck import check as quick_check
-from .discovery import discover
+from .discovery import PARSER_JAVA, discover
 from .projects import prepare as prepare_project
 from .reporters import dashboard, sarif
 
@@ -97,7 +97,7 @@ def make_server(root, port=0, *, quick=False, project=None):
             if route == '/api/state':
                 try:
                     policy = configuration.load(root, optional=True)
-                    self.send(dict(version=__version__, workspace_mode="quick" if quick else "repository", project=project or dict(kind="local", label=str(root), temporary=False), repository=str(root), name="Local text check" if quick else root.name, policy=policy.model_dump(), rules=policy.catalog(),
+                    self.send(dict(version=__version__, java_parser=PARSER_JAVA, workspace_mode="quick" if quick else "repository", project=project or dict(kind="local", label=str(root), temporary=False), repository=str(root), name="Local text check" if quick else root.name, policy=policy.model_dump(), rules=policy.catalog(),
                         discovery=discover(root), guidance=instructions.guidance(policy.active(), policy.catalog())))
                 except (ValueError, OSError, yaml.YAMLError, RecursionError) as error:
                     self.send({'error': user_error(error)}, 400)
@@ -151,14 +151,15 @@ def make_server(root, port=0, *, quick=False, project=None):
                     # Draft policy is validated and scanned, never saved or baselined.
                     policy = configuration.Policy.model_validate(body)
                     report = scan(root, policy.active(), policy.exclude, policy.catalog(),
-                                  policy.examples, capture_scope=True)
+                                  policy.examples, capture_scope=True, java_version=policy.java.version)
                     self.send(dict(files=report['scope_files'], approved_rules=report['approved_rules'],
                                    analyzed_files=report['analyzed_files'], skipped=report['skipped'],
                                    excluded_files=report['excluded_files'], example_files=report['example_files'],
                                    counter_example_files=report['counter_example_files']))
                 elif route in ('/api/check', '/api/export'):
                     policy = configuration.load(root)
-                    report = baseline.apply(scan(root, policy.active(), policy.exclude, policy.catalog(), policy.examples), root)
+                    report = baseline.apply(scan(root, policy.active(), policy.exclude, policy.catalog(), policy.examples,
+                                                     java_version=policy.java.version), root)
                     if route == '/api/export':
                         fmt = body.get('format', 'json')
                         if fmt not in {'json', 'sarif', 'html'}:

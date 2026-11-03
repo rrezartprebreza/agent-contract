@@ -82,7 +82,12 @@ def analyze(source, path, rules, catalog=RULES):
     return instructions.analyze(source, path, rules, catalog)
 
 
-def scan(root, rules, exclude=(), catalog=RULES, examples=None, *, capture_scope=False):
+def scan(root, rules, exclude=(), catalog=RULES, examples=None, *, capture_scope=False, java_version=None):
+    from .discovery import PARSER_JAVA, java_version as declared_java
+    # An explicit policy version wins over the one declared in build files.
+    java = dict(version=java_version, source='policy') if java_version else dict(zip(('version', 'source'), declared_java(root)))
+    java['parser'] = PARSER_JAVA
+    newer_java = (java['version'] or 0) > PARSER_JAVA
     findings, skipped = [], []
     scope_files = []
     count = 0
@@ -180,7 +185,10 @@ def scan(root, rules, exclude=(), catalog=RULES, examples=None, *, capture_scope
                 where = f' at line {error.lineno}' if error.lineno else ''
                 skipped.append(dict(path=rel, reason=f'Python syntax error{where}: {error.msg}'))
             except (java_checks.JavaSyntaxError, instructions.InstructionSyntaxError) as error:
-                skipped.append(dict(path=rel, reason=str(error)))
+                reason = str(error)
+                if newer_java and path.suffix == '.java':
+                    reason += f'. This project targets Java {java["version"]}; syntax newer than Java {PARSER_JAVA} is not parsed yet'
+                skipped.append(dict(path=rel, reason=reason))
             except (ValueError, RecursionError) as error:
                 if path.suffix != '.json':
                     raise
@@ -189,6 +197,9 @@ def scan(root, rules, exclude=(), catalog=RULES, examples=None, *, capture_scope
     if example_patterns:
         limitations.append(f'{example_files} Java example file(s) analyzed heuristically; findings are warnings, not proof of resolved annotation types. '
                            f'{len(counter_examples)} explicitly configured counter-example file(s) omitted.')
+    if newer_java:
+        limitations.append(f'This project targets Java {java["version"]}. Java syntax up to Java {PARSER_JAVA} is parsed; '
+                           'files using newer syntax are reported as incomplete, never as passing.')
     if scoped_out:
         limitations.append(f'{len(scoped_out)} file(s) have rules omitted by per-rule path scopes; see rule_scope_omissions.')
     if capture_scope:
@@ -199,7 +210,7 @@ def scan(root, rules, exclude=(), catalog=RULES, examples=None, *, capture_scope
     return dict(version=1, findings=sorted(findings, key=lambda f: (f['path'], f['line'], f['rule'])),
                 skipped=skipped, limitations=limitations, analyzed_files=analyzed, approved_rules=len(rules),
                 excluded_files=excluded, example_files=example_files,
-                counter_example_files=counter_examples, rule_scope_omissions=scoped_out,
+                counter_example_files=counter_examples, rule_scope_omissions=scoped_out, java=java,
                 **({'scope_files': scope_files} if capture_scope else {}))
 
 

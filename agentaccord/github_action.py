@@ -22,7 +22,7 @@ def main():
             report, _ = compare(root, Path(base))
         else:
             policy = configuration.load(root)
-            report = baseline.apply(scan(root, policy.active(), policy.exclude, policy.catalog(), policy.examples), root)
+            report = baseline.apply(scan(root, policy.active(), policy.exclude, policy.catalog(), policy.examples, java_version=policy.java.version), root)
         workspace = Path(os.environ.get('GITHUB_WORKSPACE', str(root))).resolve()
         if not root.is_relative_to(workspace):
             raise ValueError('Target must be inside GITHUB_WORKSPACE for file annotations')
