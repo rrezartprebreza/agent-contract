@@ -1,5 +1,5 @@
 """Bounded discovery from filenames; never executes project scripts."""
-LANGUAGES = {'.java': 'Java', '.py': 'Python', '.ts': 'TypeScript', '.tsx': 'TypeScript', '.js': 'JavaScript', '.cs': 'C#', '.go': 'Go', '.rs': 'Rust'}
+LANGUAGES = {'.json': 'JSON', '.yaml': 'YAML', '.yml': 'YAML', '.java': 'Java', '.py': 'Python', '.ts': 'TypeScript', '.tsx': 'TypeScript', '.js': 'JavaScript', '.cs': 'C#', '.go': 'Go', '.rs': 'Rust'}
 MANIFESTS = {'pom.xml': 'Maven', 'build.gradle': 'Gradle', 'build.gradle.kts': 'Gradle', 'package.json': 'Node.js', 'pyproject.toml': 'Python', 'Cargo.toml': 'Cargo', 'go.mod': 'Go'}
 
 

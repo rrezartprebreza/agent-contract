@@ -11,6 +11,7 @@ from . import __version__, baseline, configuration, instructions
 from .engine import scan, exit_code
 from .quickcheck import check as quick_check
 from .discovery import discover
+from .projects import prepare as prepare_project
 from .reporters import dashboard, sarif
 
 def user_error(error):
@@ -25,8 +26,20 @@ def user_error(error):
 class LocalServer(ThreadingHTTPServer):
     daemon_threads = True
 
+    def server_close(self):
+        for child, thread in getattr(self, 'children', []):
+            child.shutdown()
+            child.server_close()
+            thread.join(timeout=5)
+        self.children = []
+        super().server_close()
+        temporary = getattr(self, 'temporary', None)
+        if temporary:
+            temporary.cleanup()
+            self.temporary = None
 
-def make_server(root, port=0, *, quick=False):
+
+def make_server(root, port=0, *, quick=False, project=None):
     root = root.resolve(strict=True)
     if not root.is_dir():
         raise ValueError('Repository must be a directory')
@@ -78,7 +91,7 @@ def make_server(root, port=0, *, quick=False):
             if route == '/api/state':
                 try:
                     policy = configuration.load(root, optional=True)
-                    self.send(dict(version=__version__, workspace_mode="quick" if quick else "repository", repository=str(root), name="Local text check" if quick else root.name, policy=policy.model_dump(), rules=policy.catalog(),
+                    self.send(dict(version=__version__, workspace_mode="quick" if quick else "repository", project=project or dict(kind="local", label=str(root), temporary=False), repository=str(root), name="Local text check" if quick else root.name, policy=policy.model_dump(), rules=policy.catalog(),
                         discovery=discover(root), guidance=instructions.guidance(policy.active(), policy.catalog())))
                 except (ValueError, OSError, yaml.YAMLError, RecursionError) as error:
                     self.send({'error': user_error(error)}, 400)
@@ -106,6 +119,24 @@ def make_server(root, port=0, *, quick=False):
                 route = urlsplit(self.path).path
                 if route == '/api/quick-check':
                     self.send(quick_check(body))
+                elif route == '/api/open-project':
+                    if len(self.server.children) >= 5:
+                        raise ValueError('This workspace has opened five projects. Restart the app to release them before opening more.')
+                    selected, temporary, metadata = prepare_project(body)
+                    try:
+                        # Bound discovery and policy validation before handing the workspace to the user.
+                        discover(selected)
+                        configuration.load(selected, optional=True)
+                        child = make_server(selected, project=metadata)
+                    except BaseException:
+                        if temporary:
+                            temporary.cleanup()
+                        raise
+                    child.temporary = temporary
+                    thread = threading.Thread(target=child.serve_forever, daemon=True)
+                    self.server.children.append((child, thread))
+                    thread.start()
+                    self.send(dict(url=child.url, project=metadata, repository=str(selected)))
                 elif route == '/api/policy':
                     policy = configuration.Policy.model_validate(body)
                     configuration.save(root, policy)
@@ -144,6 +175,8 @@ def make_server(root, port=0, *, quick=False):
     # The fragment never reaches HTTP logs; the app moves it into per-tab memory.
     server.url = f'http://127.0.0.1:{server.server_port}/#token={token}'
     server.token = token
+    server.children = []
+    server.temporary = None
     return server
 
 

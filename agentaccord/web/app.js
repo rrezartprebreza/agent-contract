@@ -101,8 +101,13 @@ $('previewScope').onclick=()=>busy($('previewScope'),async()=>{
   const scroll=el('div',undefined,'table-scroll');scroll.append(table);container.append(scroll);
 });
 async function refresh(){state=await api('state');$('appVersion').textContent='VERSION '+state.version;$('repoName').textContent=state.name;$('repoPath').textContent=state.repository;$('approved').textContent=Object.values(state.policy.rules).filter(p=>p.approved&&p.enabled).length;$('languages').textContent=Object.keys(state.discovery.languages).length;$('instructions').textContent=state.discovery.instructions.length;$('languageTags').replaceChildren(...Object.entries(state.discovery.languages).map(([name,count])=>el('span',name+' · '+count+' files')));$('instructionList').replaceChildren(...(state.discovery.instructions.length?state.discovery.instructions:['No recognized instruction files found']).map(p=>el('li',p)));$('guidanceText').textContent=state.guidance;renderPolicies();renderQuickRules();
+const source=state.project||{};
+$('projectSource').textContent=(source.kind==='github'?'GitHub snapshot: ':'Local folder: ')+(source.label||state.repository)+(source.note?' — '+source.note:'');
+const supported=new Set(Object.values(state.rules).map(r=>r.language));
+$('supportedCoverage').replaceChildren(...Object.entries(state.discovery.languages).map(([language,count])=>el('p',language+': '+count+' files · '+(supported.has(language)?'rules available; approval required':'detected only; no analyzer yet'),'muted')));
+
 if(state.workspace_mode==='quick'){
-  view('quick'); document.querySelectorAll('[data-view]').forEach(b=>b.hidden=b.dataset.view!=='quick');
+  view('quick'); document.querySelectorAll('[data-view]').forEach(b=>b.hidden=!['quick','connect'].includes(b.dataset.view));
   document.querySelector('header .label').textContent='LOCAL TEXT WORKSPACE';
 }}
 
@@ -199,3 +204,25 @@ $('quickRun').onclick=()=>busy($('quickRun'),async()=>{
   const details=el('details');details.append(el('summary','What was checked and limitations'));const list=el('ul');r.limitations.forEach(t=>list.append(el('li',t)));details.append(list);box.append(details);
   notice('Local text check finished. Project policy and files were not changed.');
 });
+
+async function connectProject(kind,location,button){
+  await busy(button,async()=>{
+    if(!location.trim())throw new Error(kind==='local'?'Enter a local folder path.':'Enter a public GitHub repository URL.');
+    $('projectConnectionResult').replaceChildren(el('p',kind==='github'?'Downloading and validating the snapshot…':'Checking the folder…','summary'));
+    try{
+      const connected=await api('open-project',{kind,location:location.trim()});
+      const box=$('projectConnectionResult');box.replaceChildren(el('h2','Project ready'),el('p',connected.project.label));
+      box.append(el('p',connected.project.temporary?'Temporary snapshot. Source repository is unchanged.':'Local folder. Review policies before making changes.','muted'));
+      const link=el('a','Open connected workspace','project-link');link.href=connected.url;box.append(link);
+      notice('Project connected. Open its workspace to review coverage and choose policies.');
+    }catch(error){$('projectConnectionResult').replaceChildren(el('p',error.message,'summary error'));throw error;}
+  });
+}
+$('openLocalProject').onclick=()=>connectProject('local',$('localProjectPath').value,$('openLocalProject'));
+$('openGithubProject').onclick=()=>connectProject('github',$('githubProjectUrl').value,$('openGithubProject'));
+$('teachingPaths').onclick=()=>{
+  const add=(field,values)=>{const input=document.querySelector('[data-field="'+field+'"]');input.value=[...new Set([...paths(input),...values])].join('\n');};
+  add('java-examples',['**/examples/**/*.java','**/templates/**/*.java']);
+  add('counter-examples',['**/examples/bad-*.java']);
+  markDirty();notice('Teaching paths added to the draft. Review them, choose rules, and preview before saving. No rules were approved.');
+};

@@ -73,6 +73,31 @@ JavaScript, TypeScript, YAML and other language analyzers are not yet supported.
 Repository policies can also enable `python.no-bare-except` and
 `json.no-duplicate-keys` with the existing approval, severity, and path settings.
 
+## Connect a project from the app
+
+Select **Open a project** from either `agentaccord quick` or an existing project
+workspace. Enter an absolute local folder path or a public repository URL such as
+`https://github.com/owner/repository`, then open the connected workspace.
+Each connection has a separate loopback server, session token, policy, and results.
+Opening a local folder does not write to it; saving policy or guidance later does.
+Private repositories work through existing local clones; the app does not request
+GitHub credentials or tokens.
+
+GitHub connections download the current default branch using GitHub's public
+[ZIP archive API](https://docs.github.com/en/rest/repos/contents#download-a-repository-archive-zip).
+These are temporary snapshots, not Git clones or live synchronization. Changes in
+the workspace do not push to GitHub and disappear when the launching app stops.
+Reconnect to fetch newer code. Archives have no history, checked-out submodules,
+or downloaded Git LFS objects. Limits: 20 MB download, 50 MB expanded, and 10,000
+entries. Symlinks, special files, unsafe paths, and encrypted archives are rejected;
+use a local clone for those projects. Each workspace can open five child workspaces.
+
+The overview distinguishes detected languages from languages with available rules.
+Connecting a repository does not establish full coverage. For a skills library,
+**Prepare teaching-example paths** adds draft Java example/template globs and an
+explicit `bad-*.java` counter-example glob. It does not approve rules or save anything.
+Review the paths, select a convention, preview coverage, then save and run checks.
+
 ## See it in 60 seconds
 
 The repository ships a demo with every kind of finding:
@@ -115,7 +140,7 @@ claiming that every match is a bug. JSON reports include a source excerpt (up to
 
 Open the complete URL the command prints; it carries a per-session token. Four screens walk through the workflow: repository overview, explicit policy approval, agent-guidance preview and update, and findings with search, filters and JSON/SARIF/HTML export.
 
-The server binds only to `127.0.0.1` and to the repository chosen at startup; use `--port 0` for a free port and Ctrl+C to stop. `./run.sh examples/spring-demo` does the same after installation.
+The server binds only to `127.0.0.1` with each workspace bound to its selected folder; use `--port 0` for a free port and Ctrl+C to stop. `./run.sh examples/spring-demo` does the same after installation.
 
 ## Use it on your repository
 
@@ -332,7 +357,7 @@ agentaccord doctor [path]     # versions and policy validity
 
 ## Trust, privacy, and limits
 
-- **Never runs your code.** No project scripts are executed and scanned Python modules are never imported. No external service or AI model is involved.
+- **Never runs your code.** No project scripts are executed and scanned Python modules are never imported. Analysis uses no external service or AI model. Connecting a public GitHub repository explicitly downloads a snapshot from GitHub; local source is not uploaded.
 - **Symlinks are not followed.** A link to an analyzed file inside the repository, such as `CLAUDE.md -> AGENTS.md`, loses nothing because the target is analyzed at its own path, and links the analysis would never read are ignored. A relevant link that leaves the repository or is broken makes the analysis incomplete.
 - **Bounded.** Relevant files over 1 MB, non-UTF-8 files, and parse errors are reported as skipped; scanning stops after 10,000 file entries; build and vendor directories are excluded.
 - **Hardened local app.** Per-session token, strict Host/Origin checks, content security policy, and loopback-only binding. It is a local development app, not a hosted multi-user service or a sandbox against hostile concurrent filesystem changes. Stop it when finished.
