@@ -1,16 +1,16 @@
 """Shared analysis engine for CLI and local app. Never runs repository code."""
 import hashlib
 import re
-from . import java_checks, python_checks, instructions
+from . import java_checks, python_checks, instructions, json_checks
 from .rules import RULES
 
 EXCLUDED = {'.git', 'node_modules', 'target', 'build', 'dist', '.venv', 'venv', '__pycache__', '.idea'}
 LIMITATIONS = [
  'Java resolves annotations from explicit imports, qualified names, and Java scoping rules; ambiguous wildcard/same-package names and import-free snippets are reported as incomplete. Custom meta-annotations and cross-file type resolution are unsupported.',
- 'Instruction checks recognize direct affirmative patterns only. Java fenced examples are checked as non-blocking warnings, with labelled counter-examples omitted. Block quotes, indented code, and HTML comments are excluded; prose semantics and instruction precedence are not interpreted.',
+ 'Instruction checks recognize direct affirmative patterns only. Java, Python, and JSON fenced examples are checked as non-blocking warnings, with labelled counter-examples omitted. Block quotes, indented code, and HTML comments are excluded; prose semantics and instruction precedence are not interpreted.',
  'Approved policies apply within their configured include/exclude paths. No inferred rule becomes blocking without approval.',
- 'Python checks cover literal list/dict/set defaults and missing function annotations, exempting self/cls parameters.',
- 'Only enabled Java/Python checks and supported instruction files are analyzed. Vendor/build directories are excluded. This is not a compiler or security audit.',
+ 'Python checks cover literal mutable defaults, missing function annotations, and bare except clauses. JSON checks syntax and duplicate object keys, not application schemas.',
+ 'Only enabled Java/Python/JSON checks and supported instruction files are analyzed. Vendor/build directories are excluded. This is not a compiler or security audit.',
 ]
 
 
@@ -22,6 +22,7 @@ def is_relevant(name, suffix, rules, catalog=RULES):
     languages = {catalog[rule]['language'] for rule in rules}
     return ((suffix == '.java' and 'Java' in languages)
             or (suffix == '.py' and 'Python' in languages)
+            or (suffix == '.json' and 'JSON' in languages)
             or is_instruction(name))
 
 
@@ -64,13 +65,18 @@ def with_fingerprints(findings, source):
     for finding in findings:
         text = lines[finding['line'] - 1] if 0 < finding['line'] <= len(lines) else ''
         finding['source_line'] = text[:500] + ('…' if len(text) > 500 else '')
-        finding['fingerprint'] = fingerprint(finding['rule'], finding['path'], text)
+        # JSON duplicate-key locations are document-level: include the whole document
+        # so edits below line one cannot silently retain an accepted baseline.
+        identity = source + '\0' + finding.get('evidence', '') if finding['rule'].startswith('json.') else text
+        finding['fingerprint'] = fingerprint(finding['rule'], finding['path'], identity)
     return findings
 
 
 def analyze(source, path, rules, catalog=RULES):
     if path.endswith('.java'):
         return java_checks.analyze(source, path, rules, catalog)
+    if path.endswith('.json'):
+        return json_checks.analyze(source, path, rules)
     if path.endswith('.py'):
         return python_checks.analyze(source, path, rules)
     return instructions.analyze(source, path, rules, catalog)
@@ -173,8 +179,12 @@ def scan(root, rules, exclude=(), catalog=RULES, examples=None, *, capture_scope
             except SyntaxError as error:
                 where = f' at line {error.lineno}' if error.lineno else ''
                 skipped.append(dict(path=rel, reason=f'Python syntax error{where}: {error.msg}'))
-            except java_checks.JavaSyntaxError as error:
+            except (java_checks.JavaSyntaxError, instructions.InstructionSyntaxError) as error:
                 skipped.append(dict(path=rel, reason=str(error)))
+            except (ValueError, RecursionError) as error:
+                if path.suffix != '.json':
+                    raise
+                skipped.append(dict(path=rel, reason='Invalid or excessively nested JSON: ' + str(error)[:200]))
     limitations = [*LIMITATIONS, *([f'{excluded} file(s) excluded by the approved policy scope: ' + ', '.join(exclude)] if excluded else [])]
     if example_patterns:
         limitations.append(f'{example_files} Java example file(s) analyzed heuristically; findings are warnings, not proof of resolved annotation types. '

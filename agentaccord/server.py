@@ -9,6 +9,7 @@ import yaml
 from pydantic import ValidationError
 from . import __version__, baseline, configuration, instructions
 from .engine import scan, exit_code
+from .quickcheck import check as quick_check
 from .discovery import discover
 from .reporters import dashboard, sarif
 
@@ -25,7 +26,7 @@ class LocalServer(ThreadingHTTPServer):
     daemon_threads = True
 
 
-def make_server(root, port=0):
+def make_server(root, port=0, *, quick=False):
     root = root.resolve(strict=True)
     if not root.is_dir():
         raise ValueError('Repository must be a directory')
@@ -77,7 +78,7 @@ def make_server(root, port=0):
             if route == '/api/state':
                 try:
                     policy = configuration.load(root, optional=True)
-                    self.send(dict(version=__version__, repository=str(root), name=root.name, policy=policy.model_dump(), rules=policy.catalog(),
+                    self.send(dict(version=__version__, workspace_mode="quick" if quick else "repository", repository=str(root), name="Local text check" if quick else root.name, policy=policy.model_dump(), rules=policy.catalog(),
                         discovery=discover(root), guidance=instructions.guidance(policy.active(), policy.catalog())))
                 except (ValueError, OSError, yaml.YAMLError, RecursionError) as error:
                     self.send({'error': user_error(error)}, 400)
@@ -96,13 +97,16 @@ def make_server(root, port=0):
                 return
             try:
                 length = int(self.headers.get('Content-Length', '0'))
-                if not 0 < length <= 32_768:
-                    raise ValueError('Request must contain 1–32768 bytes')
+                limit = 2_500_000 if urlsplit(self.path).path == '/api/quick-check' else 32_768
+                if not 0 < length <= limit:
+                    raise ValueError(f'Request must contain 1–{limit} bytes')
                 body = json.loads(self.rfile.read(length))
                 if not isinstance(body, dict):
                     raise ValueError('Expected a JSON object')
                 route = urlsplit(self.path).path
-                if route == '/api/policy':
+                if route == '/api/quick-check':
+                    self.send(quick_check(body))
+                elif route == '/api/policy':
                     policy = configuration.Policy.model_validate(body)
                     configuration.save(root, policy)
                     self.send({'saved': True})
@@ -143,10 +147,10 @@ def make_server(root, port=0):
     return server
 
 
-def serve(root, port):
+def serve(root, port, *, quick=False):
     if not 0 <= port <= 65535:
         raise ValueError('Port must be between 0 and 65535')
-    server = make_server(root, port)
+    server = make_server(root, port, quick=quick)
     print(f'AgentAccord local app: {server.url}', flush=True)
     print(f'Repository: {root}\nPress Ctrl+C to stop.', flush=True)
     try:

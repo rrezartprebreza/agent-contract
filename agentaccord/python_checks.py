@@ -3,6 +3,7 @@ import ast
 import re
 
 RULES = {
+ 'python.no-bare-except': ('Bare except clause', 'Catch the specific exception types this operation can handle.'),
  'python.no-mutable-defaults': ('Mutable default argument', 'Use None as the default and create the collection inside the function.'),
  'python.require-type-hints': ('Missing function type annotation', 'Annotate parameters and the return type.'),
 }
@@ -24,6 +25,8 @@ def analyze(source, path, rules):
             column=column, kind='code', confidence='syntax', message=message,
             evidence=type(node).__name__, remediation=RULES[rule][1]))
     for node in ast.walk(tree):
+        if isinstance(node, ast.ExceptHandler) and node.type is None:
+            add('python.no-bare-except', node, 'Bare except catches all exceptions, including process interruption')
         if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             continue
         for default in [*node.args.defaults, *node.args.kw_defaults]:

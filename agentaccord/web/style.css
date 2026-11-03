@@ -9,3 +9,7 @@ textarea{display:block;width:100%;resize:vertical;min-height:85px;border:1px sol
 table{border-collapse:collapse;width:100%;background:white;font-size:12px;text-align:left}caption{padding:12px;text-align:left;color:var(--muted)}td,th{padding:10px;border-top:1px solid var(--line);vertical-align:top;overflow-wrap:anywhere;max-width:420px}th{background:#eaf0e6}
 .finding h4{margin:18px 0 5px;font-size:12px;color:var(--green)}.finding p{font-size:13px;margin:5px 0}.evidence{background:var(--bg);padding:12px;border-radius:6px}.finding .fix{border:0;padding:0}
 @media(max-width:760px){.path-grid{grid-template-columns:1fr}}
+
+.quick-section{margin-top:24px}#quickRules{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:20px}#quickRules fieldset{padding:16px;border:1px solid var(--line);border-radius:8px}#quickRules legend{font-weight:700;color:var(--green)}.quick-rule{display:flex;align-items:flex-start;gap:10px;margin:14px 0;font-size:13px}.quick-rule input{margin-top:4px;flex-shrink:0}#quickResults article{margin-top:16px}#startQuick{margin:12px 0 0 8px}nav{flex-wrap:wrap}
+
+[hidden]{display:none!important}
