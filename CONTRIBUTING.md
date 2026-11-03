@@ -12,6 +12,6 @@ Treat paths and source text as untrusted in reports/UI. Preserve the local app's
 
 1. Set the version in `agentaccord/__init__.py` (the only place it is defined) and add its section to `CHANGELOG.md`.
 2. Merge to `main` with CI green.
-3. Tag and push: `git tag v0.4.0 && git push origin v0.4.0`.
+3. Tag and push: `git tag v0.5.0 && git push origin v0.5.0`.
 
-The `Release` workflow checks that the tag matches `__version__`, runs the tests, builds and verifies the distributions, publishes to PyPI with trusted publishing (no stored token), and creates the GitHub release from the changelog section. The tag also becomes the version users pin with `uses: rrezartprebreza/agentaccord@v0.4.0` and in pre-commit.
+The `Release` workflow checks that the tag matches `__version__`, runs the tests, builds and verifies the distributions, publishes to PyPI with trusted publishing (no stored token), and creates the GitHub release from the changelog section. The tag also becomes the version users pin with `uses: rrezartprebreza/agentaccord@v0.5.0` and in pre-commit.

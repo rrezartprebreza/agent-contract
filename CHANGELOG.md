@@ -1,6 +1,10 @@
 # Changelog
 
-## Unreleased
+All notable changes to AgentAccord are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow [Semantic Versioning](https://semver.org/).
+
+## [0.5.0] - 2026-11-03
+
+### Added
 
 - Add base-checkout comparison with new/existing finding states, non-blocking existing findings, and incomplete status when either scan fails.
 - Add grouped pull-request summaries, escaped file annotations, and a single-scan GitHub Action with base-path and report-path support.
@@ -16,9 +20,6 @@
 - Respect explicit imports and local annotation declarations in snippet checks; keep malformed standalone examples incomplete.
 - Correct fenced-example coverage text and detect links whose targets are excluded from analysis.
 - Add regression coverage based on the Spring Boot Skills trial.
-
-
-All notable changes to AgentAccord are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow [Semantic Versioning](https://semver.org/).
 
 ## [0.4.1] - 2026-11-02
 
@@ -69,6 +70,7 @@ First public release, as AgentContract.
 - Managed guidance synchronization that preserves handwritten content.
 - Console, JSON, HTML, and SARIF reports.
 
+[0.5.0]: https://github.com/rrezartprebreza/agentaccord/compare/v0.4.0...v0.5.0
 [0.4.1]: https://github.com/rrezartprebreza/agentaccord/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/rrezartprebreza/agentaccord/releases/tag/v0.4.0
 [0.3.0]: https://github.com/rrezartprebreza/agentaccord/commit/efa87d5

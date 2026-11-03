@@ -1,6 +1,6 @@
 # Pull-request feedback
 
-This unreleased feature compares separate base and current checkouts:
+AgentAccord 0.5.0 compares separate base and current checkouts:
 
 ```sh
 agentaccord check /path/to/current --compare-to /path/to/base
@@ -26,9 +26,8 @@ section and HTML report. SARIF marks them unchanged.
 
 ## GitHub Actions
 
-Use two sibling checkouts. The example below uses the development branch containing
-this feature; pin a reviewed commit SHA for regular use. Published v0.4.1 does not
-contain these new inputs.
+Use two sibling checkouts. The example below uses v0.5.0; pin a reviewed commit
+SHA for regular use.
 
 ```yaml
 name: AgentAccord PR review
@@ -49,7 +48,7 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha }}
           path: current
           persist-credentials: false
-      - uses: rrezartprebreza/agentaccord@codex/pull-request-feedback
+      - uses: rrezartprebreza/agentaccord@v0.5.0
         id: accord
         with:
           path: current
