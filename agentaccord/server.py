@@ -99,7 +99,7 @@ def make_server(root, port=0):
                     self.send({'saved': True})
                 elif route in ('/api/check', '/api/export'):
                     policy = configuration.load(root)
-                    report = baseline.apply(scan(root, policy.active(), policy.exclude, policy.catalog()), root)
+                    report = baseline.apply(scan(root, policy.active(), policy.exclude, policy.catalog(), policy.examples), root)
                     if route == '/api/export':
                         fmt = body.get('format', 'json')
                         if fmt not in {'json', 'sarif', 'html'}:

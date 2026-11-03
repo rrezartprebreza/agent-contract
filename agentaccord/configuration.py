@@ -9,11 +9,46 @@ import yaml
 from pydantic import BaseModel, ConfigDict, Field, StrictBool, StrictInt, StrictStr, model_validator
 from .rules import RULES
 
-class RulePolicy(BaseModel):
+def validate_patterns(patterns):
+    for pattern in patterns:
+        if (not pattern or len(pattern) > 200 or pattern != pattern.strip()
+                or pattern.startswith('/') or '\\' in pattern
+                or any(part in ('', '.', '..') for part in pattern.split('/'))):
+            raise ValueError(f'Invalid path pattern: {pattern!r}. Use repository-relative globs')
+    if len(set(patterns)) != len(patterns):
+        raise ValueError('Duplicate path patterns')
+
+
+class PathScope(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    include: list[StrictStr] = Field(default_factory=list, max_length=50)
+    exclude: list[StrictStr] = Field(default_factory=list, max_length=50)
+
+    @model_validator(mode='after')
+    def validate_scope(self):
+        validate_patterns(self.include)
+        validate_patterns(self.exclude)
+        return self
+
+
+class Examples(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    java: list[StrictStr] = Field(default_factory=list, max_length=50)
+    counter_examples: list[StrictStr] = Field(default_factory=list, max_length=50)
+
+    @model_validator(mode='after')
+    def validate_paths(self):
+        validate_patterns(self.java)
+        validate_patterns(self.counter_examples)
+        return self
+
+
+class RulePolicy(PathScope):
     model_config = ConfigDict(extra='forbid')
     enabled: StrictBool = True
     approved: StrictBool = False
     severity: Literal['error', 'warning'] = 'error'
+    allow_job_parameters: StrictBool = False
 
 JAVA_NAME = r'[A-Za-z_$][A-Za-z0-9_$]*'
 
@@ -34,6 +69,7 @@ class Policy(BaseModel):
     rules: dict[str, RulePolicy] = Field(default_factory=dict)
     # Approved scope exclusions (e.g. teaching examples). Excluded files are counted in reports.
     exclude: list[StrictStr] = Field(default_factory=list, max_length=50)
+    examples: Examples = Field(default_factory=Examples)
     # Team-defined rules (ids start with "custom."); like built-ins they run only once approved.
     custom: dict[str, CustomRule] = Field(default_factory=dict, max_length=50)
 
@@ -47,24 +83,31 @@ class Policy(BaseModel):
         unknown = set(self.rules) - set(RULES) - set(self.custom)
         if unknown:
             raise ValueError('Unknown rules: ' + ', '.join(sorted(unknown)))
-        for pattern in self.exclude:
-            parts = pattern.split('/')
-            if (not pattern or len(pattern) > 200 or pattern != pattern.strip() or pattern.startswith('/')
-                    or '\\' in pattern or any(part in ('', '.', '..') for part in parts)):
-                raise ValueError(f'Invalid exclude pattern: {pattern!r}. Use repository-relative globs such as examples/**')
-        if len(set(self.exclude)) != len(self.exclude):
-            raise ValueError('Duplicate exclude patterns')
+        validate_patterns(self.exclude)
+        for rule, settings in self.rules.items():
+            if settings.allow_job_parameters and rule != 'spring.no-value':
+                raise ValueError('allow_job_parameters is supported only by spring.no-value')
         return self
 
     def catalog(self):
         """Built-in rules plus this policy's custom rules, in the shape the analyzers expect."""
-        merged = dict(RULES)
+        merged = {key: dict(spec) for key, spec in RULES.items()}
         for rule, spec in self.custom.items():
             simple = spec.annotation.rsplit('.', 1)[-1]
             merged[rule] = {'title': spec.title, 'language': 'Java', 'guidance': spec.guidance,
                 'remediation': spec.remediation or spec.guidance, 'annotation': simple,
                 'imports': [spec.annotation], 'custom': True,
                 **({'target': 'field'} if spec.target == 'field' else {})}
+        for rule, settings in self.rules.items():
+            merged[rule]['include'] = settings.include
+            merged[rule]['exclude'] = settings.exclude
+            if settings.include or settings.exclude:
+                scope = (' Included paths: ' + ', '.join(settings.include) + '.' if settings.include else '')
+                scope += (' Excluded paths: ' + ', '.join(settings.exclude) + '.' if settings.exclude else '')
+                merged[rule]['guidance'] += scope
+            if settings.allow_job_parameters:
+                merged[rule]['allow_job_parameters'] = True
+                merged[rule]['guidance'] += ' Exception: literal @Value jobParameters lookups are allowed.'
         return merged
 
     def active(self):
@@ -129,6 +172,12 @@ def save(root, policy):
     if target.is_symlink() or (target.exists() and not target.is_file()):
         raise ValueError('Refusing to replace a non-regular policy file')
     data = policy.model_dump()
+    if not any(data['examples'].values()):
+        del data['examples']
+    for settings in data['rules'].values():
+        for key in ('include', 'exclude', 'allow_job_parameters'):
+            if not settings[key]:
+                del settings[key]
     for optional in ('exclude', 'custom'):
         if not data[optional]:
             del data[optional]  # keep existing policy files unchanged when the feature is unused

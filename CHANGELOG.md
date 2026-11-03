@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+- Recommend LocalServerPort for literal runtime server-port injection into test fields, while preserving the configured violation.
+
+- Add opt-in standalone Java example paths and explicit counter-example paths, with non-blocking findings and separate coverage reporting.
+- Add per-rule include/exclude scopes without hiding other checks on the same file; retain these settings when saving through the local app.
+- Add an opt-in, literal Spring Batch jobParameters exception for the no-Value rule.
+- Respect explicit imports and local annotation declarations in snippet checks; keep malformed standalone examples incomplete.
+- Correct fenced-example coverage text and detect links whose targets are excluded from analysis.
+- Add regression coverage based on the Spring Boot Skills trial.
+
+
 All notable changes to AgentAccord are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow [Semantic Versioning](https://semver.org/).
 
 ## [0.4.1] - 2026-11-02

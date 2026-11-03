@@ -66,3 +66,16 @@ class AppTests(unittest.TestCase):
         (self.root/'A.java').write_text('package a;\nimport lombok.Data;\n@Data\nclass A {}')
         report=json.loads(self.request('POST','/api/check',{})[1])
         self.assertEqual(report['exit_code'],1); self.assertEqual(report['report']['findings'][0]['rule'],'custom.no-lombok-data')
+    def test_example_settings_and_rule_scopes_survive_app_roundtrip(self):
+        policy={'version':1, 'examples':{'java':['examples/**'], 'counter_examples':['examples/bad*']},
+                'rules':{'spring.no-value':{'approved':True, 'include':['examples/**'], 'allow_job_parameters':True}}}
+        self.assertEqual(self.request('POST','/api/policy',policy)[0],200)
+        saved=json.loads(self.request('GET','/api/state')[1])['policy']
+        self.assertTrue(saved['rules']['spring.no-value']['allow_job_parameters'])
+        self.assertEqual(self.request('POST','/api/policy',saved)[0],200)
+        (self.root/'examples').mkdir()
+        (self.root/'examples'/'good.java').write_text('@Value("x") String value;')
+        result=json.loads(self.request('POST','/api/check',{})[1])
+        self.assertEqual(result['exit_code'],0)
+        self.assertEqual(result['report']['findings'][0]['kind'],'example')
+        self.assertEqual(result['report']['example_files'],1)
