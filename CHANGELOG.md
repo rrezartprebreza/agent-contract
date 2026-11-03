@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add base-checkout comparison with new/existing finding states, non-blocking existing findings, and incomplete status when either scan fails.
+- Add grouped pull-request summaries, escaped file annotations, and a single-scan GitHub Action with base-path and report-path support.
+
+- Add app controls for per-rule paths, global exclusions, Java teaching examples, and Batch exceptions, with a read-only draft coverage preview.
+- Explain findings with bounded source excerpts, the approved policy and scope, confidence limitations, and remediation.
+
 - Recommend LocalServerPort for literal runtime server-port injection into test fields, while preserving the configured violation.
 
 - Add opt-in standalone Java example paths and explicit counter-example paths, with non-blocking findings and separate coverage reporting.

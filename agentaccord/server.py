@@ -6,10 +6,19 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlsplit
 import yaml
+from pydantic import ValidationError
 from . import __version__, baseline, configuration, instructions
 from .engine import scan, exit_code
 from .discovery import discover
 from .reporters import dashboard, sarif
+
+def user_error(error):
+    if isinstance(error, ValidationError):
+        return '\n'.join(
+            ('.'.join(str(part) for part in item['loc']) + ': ' if item['loc'] else '')
+            + item['msg'].removeprefix('Value error, ')
+            for item in error.errors(include_url=False, include_input=False))
+    return str(error)
 
 
 class LocalServer(ThreadingHTTPServer):
@@ -71,7 +80,7 @@ def make_server(root, port=0):
                     self.send(dict(version=__version__, repository=str(root), name=root.name, policy=policy.model_dump(), rules=policy.catalog(),
                         discovery=discover(root), guidance=instructions.guidance(policy.active(), policy.catalog())))
                 except (ValueError, OSError, yaml.YAMLError, RecursionError) as error:
-                    self.send({'error': str(error)}, 400)
+                    self.send({'error': user_error(error)}, 400)
                 return
             self.send({'error': 'Not found'}, 404)
 
@@ -97,6 +106,15 @@ def make_server(root, port=0):
                     policy = configuration.Policy.model_validate(body)
                     configuration.save(root, policy)
                     self.send({'saved': True})
+                elif route == '/api/preview':
+                    # Draft policy is validated and scanned, never saved or baselined.
+                    policy = configuration.Policy.model_validate(body)
+                    report = scan(root, policy.active(), policy.exclude, policy.catalog(),
+                                  policy.examples, capture_scope=True)
+                    self.send(dict(files=report['scope_files'], approved_rules=report['approved_rules'],
+                                   analyzed_files=report['analyzed_files'], skipped=report['skipped'],
+                                   excluded_files=report['excluded_files'], example_files=report['example_files'],
+                                   counter_example_files=report['counter_example_files']))
                 elif route in ('/api/check', '/api/export'):
                     policy = configuration.load(root)
                     report = baseline.apply(scan(root, policy.active(), policy.exclude, policy.catalog(), policy.examples), root)
@@ -117,7 +135,7 @@ def make_server(root, port=0):
                 else:
                     self.send({'error': 'Not found'}, 404)
             except (ValueError, OSError, yaml.YAMLError, RecursionError) as error:
-                self.send({'error': str(error)}, 400)
+                self.send({'error': user_error(error)}, 400)
     server = LocalServer(('127.0.0.1', port), Handler)
     # The fragment never reaches HTTP logs; the app moves it into per-tab memory.
     server.url = f'http://127.0.0.1:{server.server_port}/#token={token}'

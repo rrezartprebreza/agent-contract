@@ -70,7 +70,18 @@ WARNING src/OrderService.java:10:5 [spring.no-value; code] @Value is prohibited 
 
 The demo deliberately contains every kind of finding: two conflicting instruction sentences, a code example that teaches a prohibited pattern, a custom rule, code violations, and a legacy directory excluded by the policy scope. Its AGENTS.md also contains a ❌ counter-example, which is correctly **not** flagged. The demo files are analysis fixtures, not a runnable Spring application.
 
+## Pull-request feedback
+
+Compare two separate checkouts to focus on new conflicts while retaining existing
+findings. The base checkout policy is used for both scans. The GitHub Action emits
+file annotations and a grouped job summary. See the [PR setup and limitations](docs/pull-request-feedback.md).
+
 ## The local app
+
+Finding cards show the matched source line, approved policy and scope, confidence
+limitations, and suggested fix. They describe team-policy conflicts rather than
+claiming that every match is a bug. JSON reports include a source excerpt (up to
+500 characters) and the policy settings used for the finding.
 
 ```sh
 .venv/bin/agentaccord serve examples/spring-demo
@@ -187,8 +198,12 @@ literal lookup such as `@Value("#{jobParameters['status']}")` (also named
 and other SpEL remain checked. This does not verify Spring Batch bean scope
 or runtime correctness. The default is false.
 
-Configure these advanced settings in YAML. The local app preserves them when
-you change approval or severity. Reports distinguish analyzed example files
+Configure these settings in YAML or in the local app. Expand **Paths and exceptions**
+on a rule to edit its include/exclude paths. Shared controls set global exclusions,
+Java teaching-example paths, and counter-example paths. **Preview draft scope**
+runs the current draft without saving policy, guidance, or baseline files. It lists
+file treatment and applicable rules (first 200 paths), including incomplete analysis.
+Edit a path to invalidate the preview, then preview again before saving. Reports distinguish analyzed example files
 (`example_files`), omitted counter-examples, rule-scope omissions, and skipped
 files. Fenced documentation examples keep their existing non-blocking checks.
 

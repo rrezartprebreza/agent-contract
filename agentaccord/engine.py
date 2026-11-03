@@ -63,6 +63,7 @@ def with_fingerprints(findings, source):
     lines = re.split(r'\r\n|\r|\n', source)
     for finding in findings:
         text = lines[finding['line'] - 1] if 0 < finding['line'] <= len(lines) else ''
+        finding['source_line'] = text[:500] + ('…' if len(text) > 500 else '')
         finding['fingerprint'] = fingerprint(finding['rule'], finding['path'], text)
     return findings
 
@@ -75,8 +76,9 @@ def analyze(source, path, rules, catalog=RULES):
     return instructions.analyze(source, path, rules, catalog)
 
 
-def scan(root, rules, exclude=(), catalog=RULES, examples=None):
+def scan(root, rules, exclude=(), catalog=RULES, examples=None, *, capture_scope=False):
     findings, skipped = [], []
+    scope_files = []
     count = 0
     analyzed = 0
     excluded = 0
@@ -104,18 +106,26 @@ def scan(root, rules, exclude=(), catalog=RULES, examples=None):
                 raise ValueError('Repository exceeds 10,000 file entries')
             if any(pattern.fullmatch(rel) for pattern in patterns):
                 excluded += 1
+                if capture_scope:
+                    scope_files.append(dict(path=rel, status='excluded', rules=[], reason='Global exclusion'))
                 continue
             # Relevance first: a symlink the analysis would never read cannot make it incomplete.
             if not is_relevant(name, path.suffix, rules, catalog):
                 continue
             file_rules = applicable(rel)
+            entry = dict(path=rel, status='skipped', rules=sorted(
+                rule for rule in file_rules if is_relevant(name, path.suffix, {rule: file_rules[rule]}, catalog)))
+            if capture_scope:
+                scope_files.append(entry)
             omitted = sorted(set(rules) - set(file_rules))
             if omitted:
                 scoped_out.append(dict(path=rel, rules=omitted))
             if rules and (not file_rules or not is_relevant(name, path.suffix, file_rules, catalog)):
+                entry.update(status='out-of-scope', reason='No applicable approved rule')
                 continue
             is_example = path.suffix == '.java' and any(p.fullmatch(rel) for p in example_patterns)
             if is_example and any(p.fullmatch(rel) for p in counter_patterns):
+                entry.update(status='counter-example', reason='Explicit counter-example within Java example paths')
                 counter_examples.append(rel)
                 continue
             if path.is_symlink():
@@ -132,6 +142,8 @@ def scan(root, rules, exclude=(), catalog=RULES, examples=None):
                         or (any(p.fullmatch(target_rel) for p in example_patterns)
                             and any(p.fullmatch(target_rel) for p in counter_patterns))):
                     skipped.append(dict(path=rel, reason='Symbolic link outside the analyzed files; not followed'))
+                if not any(item['path'] == rel for item in skipped):
+                    entry.update(status='covered-link', reason='Target checked at its own path')
                 continue
             if not path.is_file() or path.stat().st_size > 1_000_000:
                 skipped.append(dict(path=rel, reason='Not a regular file or exceeds 1 MB'))
@@ -148,7 +160,13 @@ def scan(root, rules, exclude=(), catalog=RULES, examples=None):
                     example_files += 1
                 else:
                     results = analyze(source, rel, file_rules, catalog)
+                for finding in results:
+                    spec = catalog[finding['rule']]
+                    finding['policy'] = dict(guidance=spec['guidance'],
+                        include=spec.get('include', []), exclude=spec.get('exclude', []),
+                        severity=file_rules[finding['rule']])
                 findings.extend(with_fingerprints(results, source))
+                entry['status'] = 'example' if is_example else 'analyzed'
                 analyzed += 1
             except UnicodeError:
                 skipped.append(dict(path=rel, reason='Not UTF-8'))
@@ -163,14 +181,20 @@ def scan(root, rules, exclude=(), catalog=RULES, examples=None):
                            f'{len(counter_examples)} explicitly configured counter-example file(s) omitted.')
     if scoped_out:
         limitations.append(f'{len(scoped_out)} file(s) have rules omitted by per-rule path scopes; see rule_scope_omissions.')
+    if capture_scope:
+        reasons = {item['path']: item['reason'] for item in skipped}
+        for entry in scope_files:
+            if entry['path'] in reasons:
+                entry['reason'] = reasons[entry['path']]
     return dict(version=1, findings=sorted(findings, key=lambda f: (f['path'], f['line'], f['rule'])),
                 skipped=skipped, limitations=limitations, analyzed_files=analyzed, approved_rules=len(rules),
                 excluded_files=excluded, example_files=example_files,
-                counter_example_files=counter_examples, rule_scope_omissions=scoped_out)
+                counter_example_files=counter_examples, rule_scope_omissions=scoped_out,
+                **({'scope_files': scope_files} if capture_scope else {}))
 
 
 def exit_code(report):
-    if report['skipped'] or not report.get('approved_rules', 0):
+    if report['skipped'] or report.get('comparison', {}).get('base_skipped') or not report.get('approved_rules', 0):
         return 2
     # Baselined findings are known, accepted debt: they are reported but never block.
-    return 1 if any(f['severity'] == 'error' and not f.get('baselined') for f in report['findings']) else 0
+    return 1 if any(f['severity'] == 'error' and not f.get('baselined') and f.get('change') != 'existing' for f in report['findings']) else 0
