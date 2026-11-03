@@ -7,7 +7,7 @@ function el(tag,text,cls){const n=document.createElement(tag);if(text!==undefine
 function notice(message,error=false){$('notice').textContent=message;$('notice').className=error?'error':'';}
 async function api(path,body){const response=await fetch('/api/'+path,{method:body===undefined?'GET':'POST',headers:{'X-AgentAccord-Token':token,'Content-Type':'application/json'},...(body===undefined?{}:{body:JSON.stringify(body)})});const data=await response.json();if(!response.ok)throw new Error(data.error||'Request failed');return data;}
 function view(name){document.querySelectorAll('.view').forEach(v=>v.hidden=v.id!==name);document.querySelectorAll('[data-view]').forEach(b=>b.classList.toggle('active',b.dataset.view===name));}
-document.querySelectorAll('[data-view]').forEach(b=>b.addEventListener('click',()=>view(b.dataset.view)));$('start').onclick=()=>view('policies');$('startQuick').onclick=()=>view('quick');
+document.querySelectorAll('[data-view]').forEach(b=>b.addEventListener('click',()=>view(b.dataset.view)));$('start').onclick=()=>view('policies');
 async function busy(button,action){button.disabled=true;try{await action();}catch(error){notice(error.message,true);}finally{button.disabled=false;}}
 
 function markDirty(){

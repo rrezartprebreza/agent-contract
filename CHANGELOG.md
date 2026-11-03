@@ -4,6 +4,8 @@ All notable changes to AgentAccord are documented here. The format follows [Keep
 
 ## Unreleased
 
+- `agentaccord serve` and `agentaccord quick` open the app in your default browser, through an owner-only redirect file so the token never appears in a process list. They skip this without a terminal or display (SSH, CI, redirected output); `--no-browser` prints the link only.
+- The app's menu lists the four workflow steps first, with **Open a project** and **Quick check** under **More**. The snapshot hint no longer says symlinked repositories need a local clone.
 - GitHub snapshots with symbolic links open instead of being rejected: links inside the snapshot are kept and never followed; links pointing outside are left broken inside the temporary copy, so a relevant one makes analysis incomplete. Nothing can be written through a link. (Previously any symlink, such as a plugin folder reusing shared skills, blocked the whole repository.)
 - The local app's missing-token error now says to reopen the full link printed by `agentaccord serve`; a new tab or browser opened from the address bar has no token.
 - README documents the Action's `base-path` input and `report-path` output, and why pull requests should use the base checkout's policy.

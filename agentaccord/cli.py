@@ -37,13 +37,14 @@ def main(argv=None):
             cmd.add_argument('--write', action='store_true', help='Update only the managed section of AGENTS.md')
         if command in ('serve', 'quick'):
             cmd.add_argument('--port', type=int, default=8765)
+            cmd.add_argument('--no-browser', action='store_true', help='Print the link without opening a browser')
     args = parser.parse_args(argv)
     try:
         if args.command == 'quick':
             from tempfile import TemporaryDirectory
             from .server import serve
             with TemporaryDirectory(prefix='agentaccord-workspace-') as directory:
-                serve(Path(directory), args.port, quick=True)
+                serve(Path(directory), args.port, quick=True, browser=not args.no_browser)
             return 0
         root = Path(args.path).resolve(strict=True)
         if not root.is_dir():
@@ -57,7 +58,7 @@ def main(argv=None):
             return 0
         if args.command == 'serve':
             from .server import serve
-            serve(root, args.port)
+            serve(root, args.port, browser=not args.no_browser)
             return 0
         if args.command == 'rules':
             catalog = configuration.load(root, optional=True).catalog()

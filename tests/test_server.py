@@ -1,10 +1,14 @@
 import http.client
+import io
 import json
 import tempfile
 import threading
 import unittest
+import webbrowser
 from pathlib import Path
-from agentaccord.server import make_server
+from unittest import mock
+from agentaccord.cli import main
+from agentaccord.server import can_open_browser, make_server, open_browser
 
 class AppTests(unittest.TestCase):
     def setUp(self):
@@ -134,3 +138,35 @@ class AppTests(unittest.TestCase):
         self.assertIn('repository-relative globs',message)
         self.assertNotIn('input_value',message)
         self.assertNotIn('pydantic',message)
+
+
+class BrowserLaunchTests(unittest.TestCase):
+    URL='http://127.0.0.1:8765/#token=secret&x="<y>"'
+
+    def test_opens_owner_only_redirect_file(self):
+        with mock.patch('agentaccord.server.webbrowser.open',return_value=True) as opened:
+            path=open_browser(self.URL)
+        try:
+            self.assertEqual(opened.call_args.args[0],path.as_uri())
+            self.assertNotIn('secret',opened.call_args.args[0])
+            self.assertEqual(path.stat().st_mode & 0o777,0o600)
+            content=path.read_text()
+            self.assertIn('content="0;url=http://127.0.0.1:8765/#token=secret&amp;x=&quot;&lt;y&gt;&quot;"',content)
+        finally:
+            path.unlink()
+
+    def test_no_browser_leaves_no_file(self):
+        for result in (False, webbrowser.Error('none')):
+            with mock.patch('agentaccord.server.webbrowser.open',**({'side_effect':result} if isinstance(result,Exception) else {'return_value':result})) as opened:
+                self.assertIsNone(open_browser(self.URL))
+            self.assertFalse(Path(opened.call_args.args[0].removeprefix('file://')).exists())
+
+    def test_never_opens_without_a_terminal(self):
+        with mock.patch('sys.stdout',io.StringIO()):
+            self.assertFalse(can_open_browser())
+
+    def test_serve_honours_no_browser(self):
+        for argv,expected in ((['serve','--no-browser'],False),(['serve'],True)):
+            with tempfile.TemporaryDirectory() as directory, mock.patch('agentaccord.server.serve') as serve:
+                self.assertEqual(main([*argv[:1],directory,*argv[1:]]),0)
+                self.assertIs(serve.call_args.kwargs['browser'],expected)
