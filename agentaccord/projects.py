@@ -1,5 +1,7 @@
 """Explicit project selection and bounded public GitHub snapshots. Never runs Git or code."""
 import io
+import os
+import posixpath
 import re
 import stat
 import ssl
@@ -17,6 +19,11 @@ from pydantic import BaseModel, ConfigDict, Field, StrictStr
 MAX_DOWNLOAD = 20_000_000
 MAX_EXPANDED = 50_000_000
 MAX_ENTRIES = 10_000
+MAX_LINK_TARGET = 4096
+# Links that would leave the snapshot are recreated pointing here instead: a name that
+# never exists, so the link is broken, cannot reach host files, and analysis that needs
+# it is reported as incomplete -- the same outcome as a local clone.
+OUTSIDE_LINK = '.agentaccord-link-target-outside-snapshot'
 
 
 class ProjectRequest(BaseModel):
@@ -71,7 +78,9 @@ def download(repository):
 
 
 def unpack(data, root):
-    """Validate the complete manifest before writing files; reject links and special entries."""
+    """Validate the complete manifest before writing anything. Regular files and folders are
+    extracted; symbolic links are recreated last and never followed (see OUTSIDE_LINK).
+    Returns the number of links and how many of them pointed outside the snapshot."""
     if len(data) > MAX_DOWNLOAD:
         raise ValueError('Archive exceeds 20 MB')
     try:
@@ -79,7 +88,7 @@ def unpack(data, root):
             entries = archive.infolist()
             if not entries or len(entries) > MAX_ENTRIES:
                 raise ValueError('Snapshot must contain between 1 and 10,000 entries')
-            total, prefix, paths, plan = 0, None, set(), []
+            total, prefix, paths, plan, links = 0, None, set(), [], []
             for entry in entries:
                 name = entry.filename.rstrip('/')
                 parts = name.split('/')
@@ -92,8 +101,8 @@ def unpack(data, root):
                 if parts[0] != prefix:
                     raise ValueError('Snapshot must have one root folder')
                 mode = stat.S_IFMT(entry.external_attr >> 16)
-                if mode not in {0, stat.S_IFREG, stat.S_IFDIR} or entry.flag_bits & 1:
-                    raise ValueError('Snapshots with symbolic links, special files, or encrypted entries require a local clone')
+                if mode not in {0, stat.S_IFREG, stat.S_IFDIR, stat.S_IFLNK} or entry.flag_bits & 1:
+                    raise ValueError('Snapshots with special files or encrypted entries require a local clone')
                 if len(parts) == 1:
                     if not entry.is_dir():
                         raise ValueError('Snapshot root must be a folder')
@@ -106,7 +115,17 @@ def unpack(data, root):
                 total += entry.file_size
                 if total > MAX_EXPANDED:
                     raise ValueError('Snapshot exceeds 50 MB expanded; open a local clone instead')
-                plan.append((entry, root.joinpath(*parts[1:])))
+                if mode == stat.S_IFLNK:
+                    if entry.is_dir() or entry.file_size > MAX_LINK_TARGET:
+                        raise ValueError('Snapshot contains an invalid symbolic link')
+                    links.append((entry, relative))
+                else:
+                    plan.append((entry, root.joinpath(*parts[1:])))
+            # Nothing may be written through a link: no entry can live underneath a link path.
+            link_paths = {relative.casefold() for _, relative in links}
+            for key in paths:
+                if any(key.startswith(link + '/') for link in link_paths):
+                    raise ValueError('Snapshot contains an entry inside a symbolic link')
             for entry, target in plan:
                 if entry.is_dir():
                     target.mkdir(parents=True, exist_ok=True)
@@ -119,6 +138,21 @@ def unpack(data, root):
                             if written > entry.file_size:
                                 raise ValueError('Archive entry exceeds its declared size')
                             output.write(chunk)
+            outside = 0
+            for entry, relative in links:
+                try:
+                    target = archive.read(entry).decode('utf-8')
+                except UnicodeDecodeError as error:
+                    raise ValueError('Snapshot contains an invalid symbolic link') from error
+                if not target or any(ord(c) < 32 for c in target) or '\\' in target:
+                    raise ValueError('Snapshot contains an invalid symbolic link')
+                resolved = posixpath.normpath(posixpath.join(posixpath.dirname(relative), target))
+                if target.startswith('/') or resolved == '..' or resolved.startswith('../'):
+                    target, outside = OUTSIDE_LINK, outside + 1
+                path = root.joinpath(*relative.split('/'))
+                path.parent.mkdir(parents=True, exist_ok=True)
+                os.symlink(target, path)
+            return dict(links=len(links), outside_links=outside)
     except (zipfile.BadZipFile, NotImplementedError, RuntimeError) as error:
         raise ValueError('GitHub did not return a supported ZIP snapshot') from error
 
@@ -138,9 +172,15 @@ def prepare(body):
     root = Path(temporary.name) / repository.split('/')[1]
     root.mkdir()
     try:
-        unpack(download(repository), root)
+        extracted = unpack(download(repository), root)
     except BaseException:
         temporary.cleanup()
         raise
+    note = ('Default-branch snapshot. No history, submodule checkout, or Git LFS download. '
+            'Changes stay in this temporary copy and disappear when the app stops.')
+    if extracted['links']:
+        note += (f" {extracted['links']} symbolic link(s) kept as links and never followed"
+                 + (f"; {extracted['outside_links']} pointed outside the snapshot and are left broken." if extracted['outside_links'] else '.'))
     return root, temporary, dict(kind='github', label='https://github.com/' + repository,
-                                 temporary=True, note='Default-branch snapshot. No history, submodule checkout, or Git LFS download. Changes stay in this temporary copy and disappear when the app stops.')
+                                 temporary=True, note=note, links=extracted['links'],
+                                 outside_links=extracted['outside_links'])

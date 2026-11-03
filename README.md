@@ -89,8 +89,12 @@ These are temporary snapshots, not Git clones or live synchronization. Changes i
 the workspace do not push to GitHub and disappear when the launching app stops.
 Reconnect to fetch newer code. Archives have no history, checked-out submodules,
 or downloaded Git LFS objects. Limits: 20 MB download, 50 MB expanded, and 10,000
-entries. Symlinks, special files, unsafe paths, and encrypted archives are rejected;
-use a local clone for those projects. Each workspace can open five child workspaces.
+entries. Special files, unsafe paths, and encrypted archives are rejected; use a local
+clone for those projects. Symbolic links (such as plugin folders that reuse shared skills)
+are kept as links and never followed, exactly as in a local clone: links inside the
+snapshot are covered by their targets, and links pointing outside it are left broken
+inside the temporary copy, so a relevant one makes the analysis incomplete. Each
+workspace can open five child workspaces.
 
 The overview distinguishes detected languages from languages with available rules.
 Connecting a repository does not establish full coverage. For a skills library,
@@ -325,10 +329,18 @@ jobs:
 | Input | Default | Meaning |
 | --- | --- | --- |
 | `path` | `.` | Repository path to check |
+| `base-path` | — | Optional separate checkout of the pull request's base. Enables comparison mode: both snapshots use the **base** policy and only new findings block |
 | `sarif` | `true` | Upload findings to GitHub code scanning |
 | `python-version` | `3.13` | Python used to run AgentAccord |
 
-The `exit-code` output (0/1/2) is available to later steps. The action installs its own tagged source, so a pinned tag always runs exactly that version. It is listed on the GitHub Marketplace as **AgentAccord Check**.
+| Output | Meaning |
+| --- | --- |
+| `exit-code` | 0 no blocking findings, 1 policy violations, 2 incomplete analysis or tool failure |
+| `report-path` | JSON report with every new and existing finding, for upload as an artifact |
+
+**For pull requests, use `base-path`.** Without it, the policy is read from the pull request's own checkout, so a pull request could relax the rules it is checked against. With it, a PR's policy or baseline edits cannot suppress new findings. The two-checkout workflow is in [docs/pull-request-feedback.md](docs/pull-request-feedback.md).
+
+The action installs its own tagged source, so a pinned tag always runs exactly that version. It is listed on the GitHub Marketplace as **AgentAccord Check**.
 
 **pre-commit:**
 
