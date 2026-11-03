@@ -1,4 +1,5 @@
 """Tree-sitter Java checks with conservative, file-local annotation resolution."""
+import re
 from tree_sitter import Language, Parser
 import tree_sitter_java
 from .rules import RULES
@@ -56,6 +57,29 @@ def on_field(node):
     return bool(parent and parent.type == 'modifiers' and parent.parent and parent.parent.type == 'field_declaration')
 
 
+def allowed_job_parameter(node, data, spec):
+    """Only a whole literal lookup; arbitrary SpEL and property placeholders remain checked."""
+    if not spec.get('allow_job_parameters'):
+        return False
+    arguments = node.child_by_field_name('arguments')
+    if not arguments:
+        return False
+    value = data[arguments.start_byte:arguments.end_byte].decode('utf-8')
+    return bool(re.fullmatch(
+        r'''\(\s*(?:value\s*=\s*)?"#\{jobParameters\['[A-Za-z0-9_.-]+'\]\}"\s*\)''', value))
+
+
+def remediation_for(rule, node, data, spec):
+    """Use test-specific advice only for a literal port injection into a test field."""
+    arguments = node.child_by_field_name('arguments')
+    if rule == 'spring.no-value' and arguments and on_field(node) and in_test_class(node, data):
+        value = data[arguments.start_byte:arguments.end_byte].decode('utf-8')
+        if re.fullmatch(r'\(\s*(?:value\s*=\s*)?"\$\{local\.server\.port\}"\s*\)', value):
+            return ('Use @LocalServerPort (org.springframework.boot.test.web.server.LocalServerPort) '
+                    'to inject the running test server port, if this policy applies to your test.')
+    return spec['remediation']
+
+
 def analyze(source, path, policies, catalog=RULES):
     data = source.encode('utf-8')
     tree = Parser(JAVA).parse(data)
@@ -107,7 +131,7 @@ def analyze(source, path, policies, catalog=RULES):
             # it is provably another type (e.g. lombok.Value via `import lombok.*`).
             if not (imports or wildcards or package):
                 raise JavaSyntaxError(f'Cannot resolve @{name} at line {line}: no package or imports (code snippet?). '
-                                      'Add the import, or exclude example files in the policy scope')
+                                      'Add the import, configure Java example paths, or exclude example files in the policy scope')
             if possible & (wildcards | {package}):
                 raise JavaSyntaxError(f'Cannot resolve @{name} at line {line}; a wildcard or same-package type may supply it. '
                                       'Use an explicit import for supported analysis')
@@ -115,6 +139,8 @@ def analyze(source, path, policies, catalog=RULES):
         for rule, severity in policies.items():
             spec = catalog[rule]
             if severity == 'off' or resolved not in spec.get('imports', []):
+                continue
+            if allowed_job_parameter(node, data, spec):
                 continue
             if spec.get('target') == 'field' and not on_field(node):
                 continue
@@ -125,7 +151,7 @@ def analyze(source, path, policies, catalog=RULES):
                 line=node.start_point.row + 1, column=len(prefix.rsplit('\n', 1)[-1]) + 1,
                 kind='code', confidence='syntax', evidence='@' + name,
                 message=spec.get('message') or f'@{name.rsplit(".", 1)[-1]} is prohibited by approved policy',
-                remediation=spec['remediation']))
+                remediation=remediation_for(rule, node, data, spec)))
     return findings
 
 
@@ -134,10 +160,11 @@ def analyze(source, path, policies, catalog=RULES):
 SNIPPET_WRAPPERS = (('class Snippet {\n', '\n}'), ('', ''), ('class Snippet { void snippet() {\n', '\n} }'))
 
 
-def analyze_snippet(source, policies, catalog=RULES):
+def analyze_snippet(source, policies, catalog=RULES, *, strict=False):
     """Annotation uses in a documentation code example, as (rule, line, column, evidence).
 
-    Examples omit imports, so names match by their simple name. Annotations that need an
+    Examples may omit imports, so unresolved names match heuristically by their simple name.
+    Explicit imports, qualified names and locally declared types take precedence. Annotations that need an
     argument in the policed library (Spring's @Value) only match with one, which keeps
     argument-less look-alikes such as Lombok's @Value out. Non-Java text yields nothing."""
     for prefix, suffix in SNIPPET_WRAPPERS:
@@ -146,8 +173,22 @@ def analyze_snippet(source, policies, catalog=RULES):
         if not root.has_error:
             break
     else:
+        if strict:
+            raise JavaSyntaxError('Java example could not be parsed, including supported snippet wrappers')
         return []
     offset = prefix.count('\n')
+    imports, local_names = {}, set()
+    for node in walk(root):
+        text = data[node.start_byte:node.end_byte].decode('utf-8')
+        if node.type == 'import_declaration':
+            qualified = text.removeprefix('import').strip().removesuffix(';').strip()
+            if not qualified.startswith('static ') and not qualified.endswith('.*'):
+                imports[qualified.rsplit('.', 1)[-1]] = qualified
+        if node.type in {'class_declaration', 'interface_declaration', 'annotation_type_declaration',
+                         'enum_declaration', 'record_declaration'}:
+            name_node = node.child_by_field_name('name')
+            if name_node:
+                local_names.add(data[name_node.start_byte:name_node.end_byte].decode('utf-8'))
     wanted = {}
     for rule, severity in policies.items():
         if severity == 'off':
@@ -162,8 +203,15 @@ def analyze_snippet(source, policies, catalog=RULES):
         if not name_node:
             continue
         name = data[name_node.start_byte:name_node.end_byte].decode('utf-8')
+        if '.' not in name and name in local_names:
+            continue
+        resolved = name if '.' in name else imports.get(name)
         for rule in sorted(wanted.get(name.rsplit('.', 1)[-1], ())):
             spec = catalog[rule]
+            if resolved and resolved not in spec.get('imports', []):
+                continue
+            if allowed_job_parameter(node, data, spec):
+                continue
             if spec.get('target') == 'field' and not on_field(node):
                 continue
             if spec.get('skip_test_classes') and in_test_class(node, data):

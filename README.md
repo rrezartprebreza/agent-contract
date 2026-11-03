@@ -29,6 +29,16 @@ It is free, MIT-licensed, and fully local: no account, no AI API key, no uploads
 | Typed configuration | ```` ```java ```` example using `@Value("${url}")` | `@Value("${payments.url}") String url;` |
 | *Your own rule*, e.g. no Lombok `@Data` | `Use @Data for DTOs.` | `@Data public class Money` |
 
+## Evidence and first use
+
+The [public repository trial](docs/public-repository-trial.md) checked pinned
+Spring Petclinic, Spring Batch guide, and Flask revisions. It records coverage,
+manual review, and limitations without presenting hypothetical policy matches as
+upstream bugs. The results are reproducible with the included evaluator.
+
+Use the [pilot guide](docs/pilot-guide.md) to try one agreed team rule, check both
+instruction and code conflicts, and record whether the findings are useful.
+
 ## Install
 
 ```sh
@@ -132,6 +142,56 @@ rules:
 | `exclude` | Repository-relative globs. `*` and `?` stay within one path segment, `**` spans segments. Every report states how many files were excluded, so a narrowed scope is never silent. |
 | `custom` | Team-defined rules; IDs look like `custom.no-lombok-data`. They get the same import-aware code check, instruction-sentence check, code-example check, and generated guidance as built-in rules. |
 
+### Teaching repositories and rule scopes
+
+Ordinary Java files retain conservative import resolution and blocking policy checks.
+For a skills library, explicitly mark standalone snippets as teaching examples:
+
+```yaml
+version: 1
+examples:
+  java:
+    - "skills/**/examples/**/*.java"
+    - "skills/**/templates/**/*.java"
+  counter_examples:
+    - "skills/**/examples/bad-*.java"
+rules:
+  spring.no-field-injection:
+    approved: true
+  spring.no-value:
+    approved: true
+    allow_job_parameters: true
+  spring.no-webmvctest:
+    approved: true
+    exclude:
+      - "skills/**/testing-pyramid/**"
+```
+
+Example findings always have severity `warning`, kind `example`, and confidence
+`example`, even when the rule normally blocks application code. Missing imports
+are matched heuristically; explicit unrelated imports and local annotation declarations
+are respected. Unparseable standalone examples remain incomplete (exit 2).
+Counter-example paths are omitted **only within `examples.java`**, and their paths
+are listed in `counter_example_files`. Ordinary Java files never become examples
+based on their filename or a comment.
+
+Each rule accepts `include` and `exclude` globs. An empty include list means all
+paths; exclude wins. Omitting one rule does not disable the others.
+Reports list affected files and rules in `rule_scope_omissions`, separately from
+global exclusions and unsupported files. Instruction files are also subject to
+these scopes: include them explicitly when restricting a rule to particular paths.
+
+Only `spring.no-value` accepts `allow_job_parameters: true`. It allows a whole,
+literal lookup such as `@Value("#{jobParameters['status']}")` (also named
+`value =`). Property placeholders, concatenated expressions, method calls,
+and other SpEL remain checked. This does not verify Spring Batch bean scope
+or runtime correctness. The default is false.
+
+Configure these advanced settings in YAML. The local app preserves them when
+you change approval or severity. Reports distinguish analyzed example files
+(`example_files`), omitted counter-examples, rule-scope omissions, and skipped
+files. Fenced documentation examples keep their existing non-blocking checks.
+
 The schema is strict: unknown keys and rule IDs, invalid severities or globs (absolute paths, `..`, duplicates), duplicate YAML keys, anchors/aliases, and unsupported versions are rejected. Earlier policy files are still read: `.agentcontract.yml` (0.3) as is, and `.agentcontract.toml` (0.1/0.2) as approved rules. Saving writes `.agentaccord.yml`, which then takes precedence; the old file is retained. Policies represent team choices: neither `@WebMvcTest` nor `@Value` is universally wrong.
 
 ## Built-in rules
@@ -157,7 +217,7 @@ The schema is strict: unknown keys and rule IDs, invalid severities or globs (ab
 
 **Python** uses the standard-library AST; scanned modules are never imported.
 
-Findings carry a `kind` (`code` or `instruction`) and a `confidence` (`syntax`, `pattern`, or `example`). Policies apply repository-wide; instruction precedence between files is not interpreted.
+Findings carry a `kind` (`code`, `instruction`, or `example`) and a `confidence` (`syntax`, `pattern`, or `example`). Policies apply within their configured path scopes; instruction precedence between files is not interpreted.
 
 ## Agent guidance stays in sync
 

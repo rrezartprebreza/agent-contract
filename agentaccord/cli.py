@@ -75,7 +75,7 @@ def main(argv=None):
             else:
                 print(instructions.guidance(rules, catalog))
             return 0
-        report = scan(root, rules, policy.exclude, catalog)
+        report = scan(root, rules, policy.exclude, catalog, policy.examples)
         if args.command == 'baseline':
             if args.prune:
                 removed = baseline.prune(root, report)
@@ -105,6 +105,11 @@ def main(argv=None):
             new = sum(not f.get('baselined') for f in report['findings'])
             accepted = f" · {known['accepted']} accepted by baseline" if known.get('accepted') else ''
             lines.append(f"{new} finding(s){accepted} · {report['analyzed_files']} files analyzed{excluded} · {len(rules)} approved rules")
+            if policy.examples.java:
+                lines.append(f"{report['example_files']} Java example files analyzed as warnings · "
+                             f"{len(report['counter_example_files'])} configured counter-example files omitted")
+            if report['rule_scope_omissions']:
+                lines.append(f"{len(report['rule_scope_omissions'])} files have rules omitted by per-rule path scopes")
             if known.get('stale'):
                 lines.append(f"{known['stale']} baseline entries were fixed: run agentaccord baseline --prune")
             if not rules:

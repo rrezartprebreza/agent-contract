@@ -7,8 +7,8 @@ from .rules import RULES
 EXCLUDED = {'.git', 'node_modules', 'target', 'build', 'dist', '.venv', 'venv', '__pycache__', '.idea'}
 LIMITATIONS = [
  'Java resolves annotations from explicit imports, qualified names, and Java scoping rules; ambiguous wildcard/same-package names and import-free snippets are reported as incomplete. Custom meta-annotations and cross-file type resolution are unsupported.',
- 'Instruction checks recognize direct affirmative patterns only. Fenced examples, block quotes, indented code, and HTML comments are excluded; prose semantics and instruction precedence are not interpreted.',
- 'Approved policies apply to the entire selected repository. No inferred rule becomes blocking without approval.',
+ 'Instruction checks recognize direct affirmative patterns only. Java fenced examples are checked as non-blocking warnings, with labelled counter-examples omitted. Block quotes, indented code, and HTML comments are excluded; prose semantics and instruction precedence are not interpreted.',
+ 'Approved policies apply within their configured include/exclude paths. No inferred rule becomes blocking without approval.',
  'Python checks cover literal list/dict/set defaults and missing function annotations, exempting self/cls parameters.',
  'Only enabled Java/Python checks and supported instruction files are analyzed. Vendor/build directories are excluded. This is not a compiler or security audit.',
 ]
@@ -75,11 +75,22 @@ def analyze(source, path, rules, catalog=RULES):
     return instructions.analyze(source, path, rules, catalog)
 
 
-def scan(root, rules, exclude=(), catalog=RULES):
+def scan(root, rules, exclude=(), catalog=RULES, examples=None):
     findings, skipped = [], []
     count = 0
     analyzed = 0
     excluded = 0
+    example_files = 0
+    counter_examples = []
+    scoped_out = []
+    example_patterns = [compile_exclude(p) for p in (examples.java if examples else ())]
+    counter_patterns = [compile_exclude(p) for p in (examples.counter_examples if examples else ())]
+    scopes = {rule: ([compile_exclude(p) for p in catalog[rule].get('include', ())],
+                     [compile_exclude(p) for p in catalog[rule].get('exclude', ())]) for rule in rules}
+    def applicable(rel):
+        return {rule: severity for rule, severity in rules.items()
+                if (not scopes[rule][0] or any(p.fullmatch(rel) for p in scopes[rule][0]))
+                and not any(p.fullmatch(rel) for p in scopes[rule][1])}
     patterns = [compile_exclude(pattern) for pattern in exclude]
     def walk_error(error):
         raise error
@@ -97,8 +108,29 @@ def scan(root, rules, exclude=(), catalog=RULES):
             # Relevance first: a symlink the analysis would never read cannot make it incomplete.
             if not is_relevant(name, path.suffix, rules, catalog):
                 continue
+            file_rules = applicable(rel)
+            omitted = sorted(set(rules) - set(file_rules))
+            if omitted:
+                scoped_out.append(dict(path=rel, rules=omitted))
+            if rules and (not file_rules or not is_relevant(name, path.suffix, file_rules, catalog)):
+                continue
+            is_example = path.suffix == '.java' and any(p.fullmatch(rel) for p in example_patterns)
+            if is_example and any(p.fullmatch(rel) for p in counter_patterns):
+                counter_examples.append(rel)
+                continue
             if path.is_symlink():
-                if not covered_symlink(root, path, rules, catalog):
+                try:
+                    target = path.resolve(strict=True)
+                except (OSError, RuntimeError):
+                    skipped.append(dict(path=rel, reason='Unresolvable symbolic link; not followed'))
+                    continue
+                target_rel = target.relative_to(root).as_posix() if target.is_relative_to(root) else ''
+                if (not covered_symlink(root, path, file_rules, catalog)
+                        or any(p.fullmatch(target_rel) for p in patterns)
+                        or set(file_rules) - set(applicable(target_rel))
+                        or (any(p.fullmatch(target_rel) for p in example_patterns) and not is_example)
+                        or (any(p.fullmatch(target_rel) for p in example_patterns)
+                            and any(p.fullmatch(target_rel) for p in counter_patterns))):
                     skipped.append(dict(path=rel, reason='Symbolic link outside the analyzed files; not followed'))
                 continue
             if not path.is_file() or path.stat().st_size > 1_000_000:
@@ -106,7 +138,17 @@ def scan(root, rules, exclude=(), catalog=RULES):
                 continue
             try:
                 source = path.read_text(encoding='utf-8')
-                findings.extend(with_fingerprints(analyze(source, rel, rules, catalog), source))
+                if is_example:
+                    matches = java_checks.analyze_snippet(source, file_rules, catalog, strict=True)
+                    results = [dict(rule=rule, severity='warning', path=rel, line=line + 1,
+                                    column=column, kind='example', confidence='example', evidence=evidence,
+                                    message='Java example may conflict with approved policy: ' + catalog[rule]['title'],
+                                    remediation=catalog[rule]['remediation'])
+                               for rule, line, column, evidence in matches]
+                    example_files += 1
+                else:
+                    results = analyze(source, rel, file_rules, catalog)
+                findings.extend(with_fingerprints(results, source))
                 analyzed += 1
             except UnicodeError:
                 skipped.append(dict(path=rel, reason='Not UTF-8'))
@@ -116,9 +158,15 @@ def scan(root, rules, exclude=(), catalog=RULES):
             except java_checks.JavaSyntaxError as error:
                 skipped.append(dict(path=rel, reason=str(error)))
     limitations = [*LIMITATIONS, *([f'{excluded} file(s) excluded by the approved policy scope: ' + ', '.join(exclude)] if excluded else [])]
+    if example_patterns:
+        limitations.append(f'{example_files} Java example file(s) analyzed heuristically; findings are warnings, not proof of resolved annotation types. '
+                           f'{len(counter_examples)} explicitly configured counter-example file(s) omitted.')
+    if scoped_out:
+        limitations.append(f'{len(scoped_out)} file(s) have rules omitted by per-rule path scopes; see rule_scope_omissions.')
     return dict(version=1, findings=sorted(findings, key=lambda f: (f['path'], f['line'], f['rule'])),
                 skipped=skipped, limitations=limitations, analyzed_files=analyzed, approved_rules=len(rules),
-                excluded_files=excluded)
+                excluded_files=excluded, example_files=example_files,
+                counter_example_files=counter_examples, rule_scope_omissions=scoped_out)
 
 
 def exit_code(report):

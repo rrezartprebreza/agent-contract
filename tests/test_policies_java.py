@@ -51,6 +51,27 @@ class JavaTests(unittest.TestCase):
         result = analyze(source,'A.java',RULES)
         self.assertEqual(result[0]['column'], source.index('@') + 1)
 
+
+    def test_runtime_test_port_has_specific_remediation(self):
+        for argument in ('"${local.server.port}"', 'value = "${local.server.port}"'):
+            source = ('import org.springframework.beans.factory.annotation.Value; '
+                      '@SpringBootTest class Test { @Value(' + argument + ') int port; }')
+            finding, = analyze(source, 'Test.java', {'spring.no-value': 'error'})
+            self.assertEqual(finding['severity'], 'error')
+            self.assertIn('@LocalServerPort', finding['remediation'])
+            self.assertNotIn('configuration-properties', finding['remediation'])
+
+    def test_runtime_port_advice_is_not_applied_to_other_contexts(self):
+        for source in (
+            'class Service { @Value("${local.server.port}") int port; }',
+            '@SpringBootTest class Test { @Value("${service.port}") int port; }',
+            '@SpringBootTest class Test { @Value("${local.server.port:8080}") int port; }',
+            '@SpringBootTest class Test { void set(@Value("${local.server.port}") int port) {} }',
+        ):
+            source = 'import org.springframework.beans.factory.annotation.Value; ' + source
+            finding, = analyze(source, 'A.java', {'spring.no-value': 'error'})
+            self.assertNotIn('@LocalServerPort', finding['remediation'])
+
 class PolicyTests(unittest.TestCase):
     def test_proposals_do_not_enforce(self):
         policy=config.Policy(rules={'spring.no-value':config.RulePolicy()})
