@@ -89,7 +89,7 @@ def main(argv=None):
             from .comparison import compare
             report, policy = compare(root, base_root)
         else:
-            report = scan(root, rules, policy.exclude, catalog, policy.examples)
+            report = scan(root, rules, policy.exclude, catalog, policy.examples, java_version=policy.java.version)
         if args.command == 'baseline':
             if args.prune:
                 removed = baseline.prune(root, report)

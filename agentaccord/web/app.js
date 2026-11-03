@@ -8,11 +8,13 @@ function notice(message,error=false){$('notice').textContent=message;$('notice')
 async function api(path,body){const response=await fetch('/api/'+path,{method:body===undefined?'GET':'POST',headers:{'X-AgentAccord-Token':token,'Content-Type':'application/json'},...(body===undefined?{}:{body:JSON.stringify(body)})});const data=await response.json();if(!response.ok)throw new Error(data.error||'Request failed');return data;}
 function view(name){document.querySelectorAll('.view').forEach(v=>v.hidden=v.id!==name);document.querySelectorAll('[data-view]').forEach(b=>b.classList.toggle('active',b.dataset.view===name));}
 document.querySelectorAll('[data-view]').forEach(b=>b.addEventListener('click',()=>view(b.dataset.view)));$('start').onclick=()=>view('policies');
+function tab(name){document.querySelectorAll('[data-tab]').forEach(b=>{const on=b.dataset.tab===name;b.setAttribute('aria-selected',on);$(b.dataset.tab).hidden=!on;});}
+document.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>tab(b.dataset.tab));
 async function busy(button,action){button.disabled=true;try{await action();}catch(error){notice(error.message,true);}finally{button.disabled=false;}}
 
 function markDirty(){
   dirty=true; policyRevision++;
-  $('policyStatus').textContent='Unsaved changes. Preview their effect, then save.';
+  $('policyStatus').textContent='Unsaved changes.';
   $('scopePreview').replaceChildren(el('p','Scope changed. Preview again to see the current draft.','muted'));
 }
 function pathInput(label, value, field, hint){
@@ -26,9 +28,15 @@ function pathInput(label, value, field, hint){
 function paths(input){return input.value.split(/\r?\n/).map(s=>s.trim()).filter(Boolean);}
 function renderPolicies(){
   const list=$('policyList'); list.replaceChildren();
-  let lastLanguage='';
+  const found=new Set(Object.keys(state.discovery.languages));
+  const other=el('details',undefined,'other-languages');other.append(el('summary','Rules for languages not found in this project'));
+  const groups={};
   Object.entries(state.rules).sort((a,b)=>a[1].language.localeCompare(b[1].language)).forEach(([id,rule])=>{
-    if(rule.language!==lastLanguage){list.append(el('h2',rule.language+' rules'));lastLanguage=rule.language;}
+    if(!groups[rule.language]){
+      const group=el('div',undefined,'rule-group'),head=el('div',undefined,'section-head');head.append(el('h2',rule.language));
+      if(rule.language==='Java')head.append(javaPicker());
+      group.append(head);groups[rule.language]=group;(found.has(rule.language)?list:other).append(group);
+    }
     const saved=state.policy.rules[id]||{approved:false,enabled:true,severity:'error'};
     const row=el('div',undefined,'policy'); row.dataset.rule=id;
     const info=el('div');
@@ -36,8 +44,8 @@ function renderPolicies(){
     const controls=el('div',undefined,'policy-controls');
     const label=el('label'); const check=document.createElement('input');
     check.type='checkbox'; check.className='approval'; check.checked=saved.approved&&saved.enabled;
-    check.setAttribute('aria-label','Approve '+rule.title); check.onchange=markDirty;
-    label.append(check,document.createTextNode(' Approve'));
+    check.setAttribute('aria-label','Turn on '+rule.title); check.onchange=markDirty;
+    label.append(check,document.createTextNode(' On'));
     const select=document.createElement('select'); select.className='rule-severity';
     select.setAttribute('aria-label',rule.title+' severity');
     ['error','warning'].forEach(v=>{const option=el('option',v==='error'?'Error':'Warning');option.value=v;select.append(option);});
@@ -55,13 +63,25 @@ function renderPolicies(){
       exception.append(checkbox,document.createTextNode(' Allow literal Spring Batch jobParameters lookups'));
       details.append(exception);
     }
-    row.append(info,controls,details); list.append(row);
+    row.append(info,controls,details); groups[rule.language].append(row);
   });
+  if(other.childElementCount>1)list.append(other);
   const shared=$('sharedScope'); shared.replaceChildren();
   shared.append(pathInput('Exclude from every rule',state.policy.exclude,'global-exclude','Use sparingly: every rule skips these paths.'));
   const examples=state.policy.examples||{};
   shared.append(pathInput('Java teaching-example paths',examples.java,'java-examples','Java snippets in these paths receive warnings, even for error rules.'),
     pathInput('Intentional counter-example paths',examples.counter_examples,'counter-examples','Omitted only inside the Java teaching-example paths above.'));
+}
+function javaLabel(){
+  const java=state.discovery.java;
+  return java&&java.version?'Java '+java.version+' from '+java.source:'not declared in build files';
+}
+function javaPicker(){
+  const label=el('label','Java version ','java-picker'),select=document.createElement('select');select.id='javaVersionSelect';
+  const auto=el('option','Detect ('+javaLabel()+')');auto.value='';select.append(auto);
+  const chosen=state.policy.java&&state.policy.java.version;
+  [...new Set([8,11,17,21,25,...(chosen?[chosen]:[])])].sort((a,b)=>a-b).forEach(v=>{const o=el('option','Java '+v);o.value=v;select.append(o);});
+  select.value=chosen||'';select.onchange=markDirty;label.append(select);return label;
 }
 function draftPolicy(){
   const rules={...state.policy.rules};
@@ -74,7 +94,8 @@ function draftPolicy(){
     const exception=row.querySelector('.batch-exception');
     if(exception)rules[id].allow_job_parameters=exception.checked;
   });
-  return {...state.policy,version:1,rules,
+  const java=$('javaVersionSelect').value;
+  return {...state.policy,version:1,rules,java:{version:java?Number(java):null},
     exclude:paths(document.querySelector('[data-field="global-exclude"]')),
     examples:{...state.policy.examples,
       java:paths(document.querySelector('[data-field="java-examples"]')),
@@ -100,17 +121,31 @@ $('previewScope').onclick=()=>busy($('previewScope'),async()=>{
   });
   const scroll=el('div',undefined,'table-scroll');scroll.append(table);container.append(scroll);
 });
-async function refresh(){state=await api('state');$('appVersion').textContent='VERSION '+state.version;$('repoName').textContent=state.name;$('repoPath').textContent=state.repository;$('approved').textContent=Object.values(state.policy.rules).filter(p=>p.approved&&p.enabled).length;$('languages').textContent=Object.keys(state.discovery.languages).length;$('instructions').textContent=state.discovery.instructions.length;$('languageTags').replaceChildren(...Object.entries(state.discovery.languages).map(([name,count])=>el('span',name+' · '+count+' files')));$('instructionList').replaceChildren(...(state.discovery.instructions.length?state.discovery.instructions:['No recognized instruction files found']).map(p=>el('li',p)));$('guidanceText').textContent=state.guidance;renderPolicies();renderQuickRules();
-const source=state.project||{};
-$('projectSource').textContent=(source.kind==='github'?'GitHub snapshot: ':'Local folder: ')+(source.label||state.repository)+(source.note?' — '+source.note:'');
-const supported=new Set(Object.values(state.rules).map(r=>r.language));
-$('supportedCoverage').replaceChildren(...Object.entries(state.discovery.languages).map(([language,count])=>el('p',language+': '+count+' files · '+(supported.has(language)?'rules available; approval required':'detected only; no analyzer yet'),'muted')));
-
-if(state.workspace_mode==='quick'){
-  view('quick'); document.querySelectorAll('[data-view]').forEach(b=>b.hidden=!['quick','connect'].includes(b.dataset.view));
-  document.querySelector('header .label').textContent='LOCAL TEXT WORKSPACE';
-}}
-
+async function refresh(){
+  state=await api('state');$('appVersion').textContent='VERSION '+state.version;$('repoName').textContent=state.name;$('repoPath').textContent=state.repository;
+  const supported=new Set(Object.values(state.rules).map(r=>r.language));
+  const languages=Object.entries(state.discovery.languages);
+  $('languageTags').replaceChildren(...languages.map(([name,count])=>el('span',name+' · '+count+(supported.has(name)?' · rules available':' · not checked yet'),supported.has(name)?'supported':'')));
+  $('supportedCoverage').replaceChildren(el('p',languages.length?'Rules exist for Java, Python and JSON. Other languages are listed but not checked.':'No source files found yet.','muted'));
+  $('instructionList').replaceChildren(...(state.discovery.instructions.length?state.discovery.instructions:['None found. AGENTS.md is created when you share rules with agents.']).map(p=>el('li',p)));
+  const java=state.discovery.java,chosen=state.policy.java&&state.policy.java.version,version=chosen||(java&&java.version);
+  $('javaFact').hidden=!java;
+  if(java){
+    $('javaVersion').textContent=version?'Java '+version:'Not declared';
+    $('javaDetail').textContent=(chosen?'Set in Rules.':version?'Detected from '+java.source+'.':'No version in pom.xml, Gradle, .java-version, .sdkmanrc or .tool-versions. Choose one in Rules.')
+      +' Code using syntax up to Java '+state.java_parser+' is checked'+(version>state.java_parser?'; files using Java '+version+'-only syntax are reported as incomplete.':'.');
+  }
+  $('guidanceText').textContent=state.guidance;renderPolicies();renderQuickRules();
+  const source=state.project||{};
+  $('projectSource').textContent=(source.kind==='github'?'GitHub snapshot':'Local folder')+(source.note?' ('+source.note+')':'')+':';
+  if(state.workspace_mode==='quick'){
+    $('projectIntro').hidden=true;$('openProject').open=true;$('repoName').textContent='No project connected';
+    document.querySelector('[data-view="policies"]').hidden=true;document.querySelector('.tabs').hidden=true;tab('quick');view('check');
+    // No project yet: two steps, and the project screen only offers to open one.
+    document.querySelector('[data-view="check"]').firstChild.textContent='2 ';$('openProjectTitle').textContent='Open a project';
+    $('checkStep').textContent='Quick check';$('checkLede').hidden=true;
+  }
+}
 
 $('savePolicies').onclick=()=>busy($('savePolicies'),async()=>{
   const policy=draftPolicy(); $('policyEditor').disabled=true;
@@ -118,13 +153,13 @@ $('savePolicies').onclick=()=>busy($('savePolicies'),async()=>{
     await api('policy',policy); dirty=false; result=null; await refresh();
     $('policyStatus').textContent='Saved to .agentaccord.yml';
     $('lastCheck').textContent='Run again';
-    $('resultSummary').textContent='Policy changed. Run checks to refresh findings.';
+    $('resultSummary').textContent='Rules changed. Run checks to refresh findings.';
     $('findingList').replaceChildren(); $('visibleCount').textContent='';
     $('coverageContent').textContent='Run a check to inspect coverage.';
-    notice('Policy saved. Only active approved rules will be enforced.');
+    notice('Rules saved. Only rules that are on are checked.');
   }finally{$('policyEditor').disabled=false;}
 });
-$('writeGuidance').onclick=()=>busy($('writeGuidance'),async()=>{if(dirty)throw new Error('Save policy changes before updating guidance.');const response=await api('guidance',{});result=null;$('lastCheck').textContent='Run again';$('resultSummary').textContent='Guidance changed. Run checks to refresh findings.';$('findingList').replaceChildren();$('visibleCount').textContent='';await refresh();notice(response.changed?'Updated the managed section of AGENTS.md. Handwritten sections were preserved.':'Guidance is already up to date.');});
+$('writeGuidance').onclick=()=>busy($('writeGuidance'),async()=>{if(dirty)throw new Error('Save rules before updating AGENTS.md.');const response=await api('guidance',{});result=null;$('lastCheck').textContent='Run again';$('resultSummary').textContent='Guidance changed. Run checks to refresh findings.';$('findingList').replaceChildren();$('visibleCount').textContent='';await refresh();notice(response.changed?'Updated the managed section of AGENTS.md. Handwritten sections were preserved.':'Guidance is already up to date.');});
 
 function renderFindings(){
   if(!result)return;
@@ -158,9 +193,9 @@ function renderFindings(){
   if(!filtered.length)list.append(el('div',active.length?'No findings match these filters.':result.exit_code===2
     ?'Analysis needs attention. Review coverage below.':'No policy conflicts found for the approved, supported checks.','empty'));
 }
-$('runCheck').onclick=()=>busy($('runCheck'),async()=>{if(dirty)throw new Error('Save policy changes before running checks.');notice('Checking source files and agent instructions…');result=await api('check',{});const r=result.report;const active=r.findings.filter(f=>!f.baselined);const errors=active.filter(f=>f.severity==='error').length;const conflicts=active.filter(f=>f.kind==='instruction').length;$('lastCheck').textContent=result.exit_code===2?'Incomplete':errors?'Review needed':'Passed';const plural=(n,word)=>`${n} ${word}${n===1?'':'s'}`;$('resultSummary').textContent=[plural(errors,'error'),plural(active.length-errors,'warning'),plural(conflicts,'instruction conflict'),plural(r.analyzed_files,'analyzed file'),...(r.excluded_files?[`${r.excluded_files} excluded by policy`]:[]),...(r.baseline&&r.baseline.accepted?[`${r.baseline.accepted} accepted by baseline`]:[]),plural(r.approved_rules,'approved rule')].join(' · ');$('resultSummary').className='summary'+(result.exit_code?' error':'');$('coverageContent').replaceChildren();const ul=el('ul');[...r.skipped.map(s=>s.path+': '+s.reason),...r.limitations,...(!r.approved_rules?['No approved rules. Approve policies before checking compliance.']:[])].forEach(t=>ul.append(el('li',t)));$('coverageContent').append(ul);renderFindings();notice(result.exit_code===2?'Analysis incomplete. Review approved policies and skipped files.':'Check complete. Findings reflect the current saved policy.',result.exit_code===2);});
+$('runCheck').onclick=()=>busy($('runCheck'),async()=>{if(dirty)throw new Error('Save rules before running checks.');notice('Checking source files and agent instructions…');result=await api('check',{});const r=result.report;const active=r.findings.filter(f=>!f.baselined);const errors=active.filter(f=>f.severity==='error').length;const conflicts=active.filter(f=>f.kind==='instruction').length;$('lastCheck').textContent=result.exit_code===2?'Incomplete':errors?'Review needed':'Passed';const plural=(n,word)=>`${n} ${word}${n===1?'':'s'}`;$('resultSummary').textContent=[plural(errors,'error'),plural(active.length-errors,'warning'),plural(conflicts,'instruction conflict'),plural(r.analyzed_files,'analyzed file'),...(r.excluded_files?[`${r.excluded_files} excluded by policy`]:[]),...(r.baseline&&r.baseline.accepted?[`${r.baseline.accepted} accepted by baseline`]:[]),plural(r.approved_rules,'rule')+' on',...(r.java&&r.java.version?['checked as Java '+r.java.version]:[])].join(' · ');$('resultSummary').className='summary'+(result.exit_code?' error':'');$('coverageContent').replaceChildren();const ul=el('ul');[...r.skipped.map(s=>s.path+': '+s.reason),...r.limitations,...(!r.approved_rules?['No approved rules. Approve policies before checking compliance.']:[])].forEach(t=>ul.append(el('li',t)));$('coverageContent').append(ul);renderFindings();notice(result.exit_code===2?'Analysis incomplete. Review approved policies and skipped files.':'Check complete. Findings reflect the current saved policy.',result.exit_code===2);});
 ['search','severity','kind'].forEach(id=>$(id).addEventListener('input',renderFindings));
-document.querySelectorAll('[data-export]').forEach(button=>button.onclick=()=>busy(button,async()=>{if(dirty)throw new Error('Save policy changes before exporting.');const data=await api('export',{format:button.dataset.export});const url=URL.createObjectURL(new Blob([data.content],{type:data.format==='html'?'text/html':'application/json'}));const a=document.createElement('a');a.href=url;a.download='agentaccord-report.'+data.format;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);notice('Report downloaded from a fresh scan.');}));
+document.querySelectorAll('[data-export]').forEach(button=>button.onclick=()=>busy(button,async()=>{if(dirty)throw new Error('Save rules before exporting.');const data=await api('export',{format:button.dataset.export});const url=URL.createObjectURL(new Blob([data.content],{type:data.format==='html'?'text/html':'application/json'}));const a=document.createElement('a');a.href=url;a.download='agentaccord-report.'+data.format;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);notice('Report downloaded from a fresh scan.');}));
 refresh().catch(error=>notice(error.message+' Open the complete URL printed by agentaccord serve.',true));
 
 function renderQuickRules(){

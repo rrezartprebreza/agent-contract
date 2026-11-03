@@ -63,6 +63,12 @@ class CustomRule(BaseModel):
     target: Literal['any', 'field'] = 'any'
 
 
+class JavaSettings(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    # None uses the version declared in the build files.
+    version: StrictInt | None = Field(default=None, ge=5, le=99)
+
+
 class Policy(BaseModel):
     model_config = ConfigDict(extra='forbid')
     version: StrictInt = 1
@@ -72,6 +78,7 @@ class Policy(BaseModel):
     examples: Examples = Field(default_factory=Examples)
     # Team-defined rules (ids start with "custom."); like built-ins they run only once approved.
     custom: dict[str, CustomRule] = Field(default_factory=dict, max_length=50)
+    java: JavaSettings = Field(default_factory=JavaSettings)
 
     @model_validator(mode='after')
     def validate_contract(self):
@@ -174,6 +181,8 @@ def save(root, policy):
     data = policy.model_dump()
     if not any(data['examples'].values()):
         del data['examples']
+    if data['java']['version'] is None:
+        del data['java']
     for settings in data['rules'].values():
         for key in ('include', 'exclude', 'allow_job_parameters'):
             if not settings[key]:

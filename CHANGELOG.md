@@ -4,6 +4,8 @@ All notable changes to AgentAccord are documented here. The format follows [Keep
 
 ## Unreleased
 
+- The app has three steps instead of six screens: **Project**, **Rules** and **Check**. Rules for languages not in the project and advanced path settings are collapsed, updating AGENTS.md sits under the rules, and the quick check is a tab on **Check**.
+- Java version: detected from `pom.xml`, Gradle, `.java-version`, `.sdkmanrc` or `.tool-versions` (never by running the build), or set with `java.version` in the policy. Shown in the app and reports. Java syntax up to Java 24 is parsed; on a newer target, a file the parser cannot read is reported as incomplete with that reason.
 - `agentaccord serve` and `agentaccord quick` open the app in your default browser, through an owner-only redirect file so the token never appears in a process list. They skip this without a terminal or display (SSH, CI, redirected output); `--no-browser` prints the link only.
 - The app's menu lists the four workflow steps first, with **Open a project** and **Quick check** under **More**. The snapshot hint no longer says symlinked repositories need a local clone.
 - GitHub snapshots with symbolic links open instead of being rejected: links inside the snapshot are kept and never followed; links pointing outside are left broken inside the temporary copy, so a relevant one makes analysis incomplete. Nothing can be written through a link. (Previously any symlink, such as a plugin folder reusing shared skills, blocked the whole repository.)
