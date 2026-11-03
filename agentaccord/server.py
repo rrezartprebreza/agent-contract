@@ -75,7 +75,8 @@ def make_server(root, port=0, *, quick=False, project=None):
                 self.send({'error': 'Cross-origin request rejected'}, 403)
                 return False
             if api and not secrets.compare_digest(self.headers.get('X-AgentAccord-Token', ''), token):
-                self.send({'error': 'Session token required'}, 403)
+                self.send({'error': 'This tab has no session token. Open the full link printed by agentaccord serve, '
+                                       'including the #token=… part; the address bar hides it after the first load.'}, 403)
                 return False
             return True
 
