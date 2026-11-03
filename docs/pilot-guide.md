@@ -13,8 +13,9 @@ take; do not count the number of findings as value.
 2. Run `agentaccord init /path/to/repository`, then `agentaccord serve /path/to/repository`.
 3. Approve one supported rule that your team actually wants. Start at warning severity.
    For example, choose constructor injection only if that is an existing team policy.
-4. In YAML, set any per-rule include/exclude paths needed for the agreed scope.
-   The local app preserves these advanced settings when saving approval and severity.
+4. Expand **Paths and exceptions** to set per-rule include/exclude paths. Configure
+   teaching examples in the shared scope controls when appropriate. Preview the draft
+   to review affected files, then save. YAML remains supported.
 5. Run checks. Review the actual source, skipped files, and scope omissions.
 6. Review generated guidance in the app before choosing to write it into `AGENTS.md`.
    Keep a diff of the generated section for the team's review.

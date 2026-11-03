@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Add app controls for per-rule paths, global exclusions, Java teaching examples, and Batch exceptions, with a read-only draft coverage preview.
+- Explain findings with bounded source excerpts, the approved policy and scope, confidence limitations, and remediation.
+
 - Recommend LocalServerPort for literal runtime server-port injection into test fields, while preserving the configured violation.
 
 - Add opt-in standalone Java example paths and explicit counter-example paths, with non-blocking findings and separate coverage reporting.

@@ -153,3 +153,12 @@ class ExampleScopeTests(unittest.TestCase):
         report = self.check(policy)
         self.assertEqual(report['skipped'], [])
         self.assertEqual(report['analyzed_files'], 0)
+    def test_findings_capture_policy_and_bounded_source_evidence(self):
+        self.write('A.java','class A { @org.springframework.beans.factory.annotation.Value("x") String x; }'+' '*600)
+        report=self.check(Policy(rules={VALUE:RulePolicy(approved=True,include=['*.java'])}))
+        finding,=report['findings']
+        self.assertEqual(finding['policy']['include'],['*.java'])
+        self.assertEqual(finding['policy']['severity'],'error')
+        self.assertEqual(len(finding['source_line']),501)
+        self.assertIn('@org.springframework',finding['source_line'])
+        self.assertNotIn('scope_files',report)
