@@ -4,6 +4,9 @@ All notable changes to AgentAccord are documented here. The format follows [Keep
 
 ## Unreleased
 
+- Add local-folder and public GitHub snapshot connections with separate workspace sessions, bounded safe archive extraction, and temporary snapshot cleanup.
+- Show language support separately from discovery and add a draft-only teaching-repository path preset.
+
 - Add a local file and pasted-text check with explicit rule selection, language groups, bounded inputs, and an isolated temporary workspace (`agentaccord quick`).
 - Add Python bare-except checks and strict JSON syntax/duplicate-key validation; report unsupported quick-check inputs explicitly.
 

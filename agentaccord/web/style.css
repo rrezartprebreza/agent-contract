@@ -13,3 +13,5 @@ table{border-collapse:collapse;width:100%;background:white;font-size:12px;text-a
 .quick-section{margin-top:24px}#quickRules{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:20px}#quickRules fieldset{padding:16px;border:1px solid var(--line);border-radius:8px}#quickRules legend{font-weight:700;color:var(--green)}.quick-rule{display:flex;align-items:flex-start;gap:10px;margin:14px 0;font-size:13px}.quick-rule input{margin-top:4px;flex-shrink:0}#quickResults article{margin-top:16px}#startQuick{margin:12px 0 0 8px}nav{flex-wrap:wrap}
 
 [hidden]{display:none!important}
+
+#connect input{display:block;width:100%;margin:10px 0;padding:12px;border:1px solid var(--line);border-radius:7px;font:inherit;box-sizing:border-box}#connect .two-col{align-items:start}#projectConnectionResult{margin:28px 0}.project-link{display:inline-block;background:var(--green);color:white;padding:12px 18px;border-radius:7px;text-decoration:none;font-weight:600}#supportedCoverage{border-top:1px solid var(--line);margin-top:14px;padding-top:10px}
