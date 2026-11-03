@@ -268,7 +268,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: rrezartprebreza/agentaccord@v0.4.1
+      - uses: rrezartprebreza/agentaccord@v0.5.0
 ```
 
 | Input | Default | Meaning |
@@ -284,7 +284,7 @@ The `exit-code` output (0/1/2) is available to later steps. The action installs 
 ```yaml
 repos:
   - repo: https://github.com/rrezartprebreza/agentaccord
-    rev: v0.4.1
+    rev: v0.5.0
     hooks:
       - id: agentaccord
 ```
