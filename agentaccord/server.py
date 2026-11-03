@@ -1,7 +1,12 @@
 """Loopback-only local review app, bound to one repository selected by the CLI."""
+import html
 import json
+import os
 import secrets
+import sys
+import tempfile
 import threading
+import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlsplit
@@ -181,11 +186,38 @@ def make_server(root, port=0, *, quick=False, project=None):
     return server
 
 
-def serve(root, port, *, quick=False):
+def can_open_browser():
+    # Never fall back to a text-mode browser in SSH sessions, CI, or redirected output.
+    if not sys.stdout.isatty():
+        return False
+    return not sys.platform.startswith('linux') or bool(os.environ.get('DISPLAY') or os.environ.get('WAYLAND_DISPLAY'))
+
+
+def open_browser(url):
+    """Open the app through an owner-only redirect file, so the token never appears in a process list."""
+    descriptor, name = tempfile.mkstemp(prefix='agentaccord-', suffix='.html')
+    path = Path(name)
+    with os.fdopen(descriptor, 'w', encoding='utf-8') as handle:
+        target = html.escape(url)
+        handle.write(f'<!doctype html><meta charset="utf-8"><meta http-equiv="refresh" content="0;url={target}">'
+                     f'<title>AgentAccord</title><a href="{target}">Open AgentAccord</a>')
+    try:
+        if webbrowser.open(path.as_uri()):
+            return path
+    except webbrowser.Error:
+        pass
+    path.unlink(missing_ok=True)
+    return None
+
+
+def serve(root, port, *, quick=False, browser=True):
     if not 0 <= port <= 65535:
         raise ValueError('Port must be between 0 and 65535')
     server = make_server(root, port, quick=quick)
     print(f'AgentAccord local app: {server.url}', flush=True)
+    launcher = open_browser(server.url) if browser and can_open_browser() else None
+    if launcher:
+        print('Opened in your default browser. Use the link above in other browsers.', flush=True)
     print(f'Repository: {root}\nPress Ctrl+C to stop.', flush=True)
     try:
         server.serve_forever()
@@ -193,3 +225,5 @@ def serve(root, port, *, quick=False):
         pass
     finally:
         server.server_close()
+        if launcher:
+            launcher.unlink(missing_ok=True)

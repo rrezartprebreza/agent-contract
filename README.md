@@ -49,7 +49,7 @@ Python 3.12 or newer. Linux and macOS are tested in CI.
 
 ## Check a skill or file without a repository
 
-Run `agentaccord quick` and open the complete local URL it prints. Select Markdown,
+Run `agentaccord quick`; it opens in your browser. Select Markdown,
 Java, Python, or JSON files, or paste text with a filename. Choose the rules for this
 check, then select **Check selected text**. **Load a teaching example** provides a
 small Java example; select **Typed configuration** to see its warning.
@@ -57,7 +57,7 @@ small Java example; select **Typed configuration** to see its warning.
 Text is sent only to the loopback app. Temporary files are removed after each check;
 project policies, guidance, and baselines are not changed. Limits are 20 files,
 100 KB per file and 400 KB total, UTF-8 only. No archives or code execution.
-The same **Check a skill** screen is available in the project workspace.
+The same screen is available in the project workspace under **More → Quick check**.
 
 | Input | Supported checks |
 | --- | --- |
@@ -142,7 +142,7 @@ claiming that every match is a bug. JSON reports include a source excerpt (up to
 .venv/bin/agentaccord serve examples/spring-demo
 ```
 
-Open the complete URL the command prints; it carries a per-session token. Four screens walk through the workflow: repository overview, explicit policy approval, agent-guidance preview and update, and findings with search, filters and JSON/SARIF/HTML export.
+It opens in your default browser. The printed link carries a per-session token: to use another browser or tab, open that complete link, including `#token=…`, because the address bar hides it after the first load. `--no-browser` only prints the link. Four screens walk through the workflow: repository overview, explicit policy approval, agent-guidance preview and update, and findings with search, filters and JSON/SARIF/HTML export.
 
 The server binds only to `127.0.0.1` with each workspace bound to its selected folder; use `--port 0` for a free port and Ctrl+C to stop. `./run.sh examples/spring-demo` does the same after installation.
 
@@ -358,7 +358,7 @@ Reports: `--format console|json|html|sarif`. `--output` never overwrites an exis
 
 ```sh
 agentaccord init [path]       # propose rules (unapproved)
-agentaccord serve [path]      # local app; --port 0 picks a free port
+agentaccord serve [path]      # local app; --port 0 picks a free port, --no-browser prints the link only
 agentaccord check [path]      # --format console|json|html|sarif, --output FILE, --no-baseline
 agentaccord baseline [path]   # accept existing findings; --prune removes fixed ones
 agentaccord guidance [path]   # preview; --write updates AGENTS.md's managed block
